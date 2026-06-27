@@ -373,6 +373,13 @@ function App() {
     await reload();
   };
 
+  const deleteGrowthRecord = async (record: GrowthRecord) => {
+    const confirmed = window.confirm('????????????');
+    if (!confirmed) return;
+    await storage.deleteGrowthRecord(record.id);
+    await reload();
+  };
+
   const addImage = async (project: Project, data: string, caption?: string) => {
     const image: ProjectImage = { id: createId(), projectId: project.id, data, caption, createdAt: nowIso() };
     await storage.saveProjectImage(image);
@@ -471,6 +478,7 @@ function App() {
             onSaveGrowthMetric={saveGrowthMetric}
             onDeleteGrowthMetric={deleteGrowthMetric}
             onSaveGrowthRecord={saveGrowthRecord}
+            onDeleteGrowthRecord={deleteGrowthRecord}
             onSaveSession={saveSession}
           />
         ) : null}
@@ -1066,7 +1074,7 @@ const exerciseUi = {
   subCategory: '\u7c7b\u578b',
 };
 
-function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growthRecords, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveExercisePlan, onSaveGrowthMetric, onDeleteGrowthMetric, onSaveGrowthRecord, onSaveSession }: {
+function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growthRecords, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveExercisePlan, onSaveGrowthMetric, onDeleteGrowthMetric, onSaveGrowthRecord, onDeleteGrowthRecord, onSaveSession }: {
   projects: Project[];
   sessions: Session[];
   exercisePlans: ExercisePlan[];
@@ -1081,6 +1089,7 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
   onSaveGrowthMetric: (metric: GrowthMetric) => Promise<void>;
   onDeleteGrowthMetric: (metric: GrowthMetric) => Promise<void>;
   onSaveGrowthRecord: (record: GrowthRecord) => Promise<void>;
+  onDeleteGrowthRecord: (record: GrowthRecord) => Promise<void>;
   onSaveSession: (session: Session) => Promise<void>;
 }) {
   const exerciseProjects = projects.filter((project) => project.mainCategory === 'exercise');
@@ -1151,7 +1160,7 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
 
       <section className="panel exercise-growth-panel-wrap">
         <h2>{exerciseUi.growth}</h2>
-        <GrowthPanel metrics={growthMetrics} records={growthRecords} onSaveMetric={onSaveGrowthMetric} onDeleteMetric={onDeleteGrowthMetric} onSaveRecord={onSaveGrowthRecord} />
+        <GrowthPanel metrics={growthMetrics} records={growthRecords} onSaveMetric={onSaveGrowthMetric} onDeleteMetric={onDeleteGrowthMetric} onSaveRecord={onSaveGrowthRecord} onDeleteRecord={onDeleteGrowthRecord} />
       </section>
     </div>
   );
@@ -1301,7 +1310,7 @@ function ExercisePlanPanel({ projects, plans, onSavePlan }: { projects: Project[
   return <div className="exercise-plan-panel"><div className="notification-row">{notificationEnabled ? <span className="status-pill active">{exerciseUi.notificationOn}</span> : <button className="secondary-button compact" onClick={requestNotification}>{exerciseUi.enableNotification}</button>}{duePlans.length > 0 ? <span className="warning-text">{exerciseUi.overduePrefix} {duePlans.length} {exerciseUi.overdueSuffix}</span> : null}</div><div className="exercise-plan-form"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={exerciseUi.planPlaceholder} /><SelectExerciseSubCategory value={subCategory} onChange={(value) => { setSubCategory(value); setProjectId(''); }} /><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{exerciseUi.relatedProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select><input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={exerciseUi.note} /><button className="primary-button" onClick={create}>{exerciseUi.addPlan}</button></div><div className="calendar-toolbar"><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>{exerciseUi.previousMonth}</button><strong>{monthCursor.getFullYear()}{'\u5e74'}{monthCursor.getMonth() + 1}{'\u6708'}</strong><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>{exerciseUi.nextMonth}</button></div><div className="exercise-plan-month">{buildMonthCells(monthCursor).map((date, index) => date ? <div key={toDateKey(date)} className="exercise-plan-day"><strong>{date.getDate()}</strong>{monthPlans.filter((plan) => toDateKey(new Date(plan.scheduledAt)) === toDateKey(date)).map((plan) => <div key={plan.id} className={'exercise-plan-item ' + plan.status}><span>{formatDateTime(plan.scheduledAt)} {plan.title}</span><small>{exerciseSubCategoryLabels[plan.subCategory]}</small>{plan.note ? <small>{plan.note}</small> : null}<div><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'done' })}>{exerciseUi.done}</button><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'skipped' })}>{exerciseUi.skipped}</button></div></div>)}</div> : <div key={'empty-' + index} className="exercise-plan-day empty" />)}</div></div>;
 }
 
-function GrowthPanel({ metrics, records, onSaveMetric, onDeleteMetric, onSaveRecord }: { metrics: GrowthMetric[]; records: GrowthRecord[]; onSaveMetric: (metric: GrowthMetric) => Promise<void>; onDeleteMetric: (metric: GrowthMetric) => Promise<void>; onSaveRecord: (record: GrowthRecord) => Promise<void> }) {
+function GrowthPanel({ metrics, records, onSaveMetric, onDeleteMetric, onSaveRecord, onDeleteRecord }: { metrics: GrowthMetric[]; records: GrowthRecord[]; onSaveMetric: (metric: GrowthMetric) => Promise<void>; onDeleteMetric: (metric: GrowthMetric) => Promise<void>; onSaveRecord: (record: GrowthRecord) => Promise<void>; onDeleteRecord: (record: GrowthRecord) => Promise<void> }) {
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('kg');
   const [selectedMetricId, setSelectedMetricId] = useState(metrics[0]?.id ?? '');
@@ -1326,7 +1335,7 @@ function GrowthPanel({ metrics, records, onSaveMetric, onDeleteMetric, onSaveRec
   };
   const oldest = [...metricRecords].sort((a, b) => a.date.localeCompare(b.date))[0];
   const newest = metricRecords[0];
-  return <div className="growth-panel"><div className="growth-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.metricPlaceholder} /><input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder={exerciseUi.unitPlaceholder} /><button className="secondary-button" onClick={createMetric}>{exerciseUi.createMetric}</button></div>{metrics.length === 0 ? <p className="empty-text">{exerciseUi.noMetric}</p> : <div className="growth-grid"><aside className="growth-metrics">{metrics.map((metric) => <div key={metric.id} className={metric.id === selectedMetricId ? 'growth-metric-row active' : 'growth-metric-row'}><button onClick={() => setSelectedMetricId(metric.id)}>{metric.name}<span>{metric.unit}</span></button><button className="danger-button compact" onClick={() => void onDeleteMetric(metric)}>{commonUi.delete}</button></div>)}</aside><section className="growth-records"><h3>{selectedMetric?.name}</h3>{oldest && newest ? <p className="muted">{exerciseUi.from} {oldest.value}{selectedMetric?.unit} {exerciseUi.to} {newest.value}{selectedMetric?.unit}{'\uff0c'}{exerciseUi.improved} {newest.value - oldest.value}{selectedMetric?.unit}</p> : null}<div className="growth-record-form"><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /><input type="number" value={value} onChange={(event) => setValue(event.target.value)} placeholder={exerciseUi.value} /><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={exerciseUi.note} /><button className="primary-button" onClick={createRecord}>{exerciseUi.addRecord}</button></div>{metricRecords.length === 0 ? <p className="empty-text">{exerciseUi.noGrowthRecord}</p> : <div className="growth-record-list">{metricRecords.map((record) => <div key={record.id}><strong>{record.date}</strong><span>{record.value}{selectedMetric?.unit}</span><em>{record.note || exerciseUi.noNote}</em></div>)}</div>}</section></div>}</div>;
+  return <div className="growth-panel"><div className="growth-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.metricPlaceholder} /><input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder={exerciseUi.unitPlaceholder} /><button className="secondary-button" onClick={createMetric}>{exerciseUi.createMetric}</button></div>{metrics.length === 0 ? <p className="empty-text">{exerciseUi.noMetric}</p> : <div className="growth-grid"><aside className="growth-metrics">{metrics.map((metric) => <div key={metric.id} className={metric.id === selectedMetricId ? 'growth-metric-row active' : 'growth-metric-row'}><button onClick={() => setSelectedMetricId(metric.id)}>{metric.name}<span>{metric.unit}</span></button><button className="danger-button compact" onClick={() => void onDeleteMetric(metric)}>{commonUi.delete}</button></div>)}</aside><section className="growth-records"><h3>{selectedMetric?.name}</h3>{oldest && newest ? <p className="muted">{exerciseUi.from} {oldest.value}{selectedMetric?.unit} {exerciseUi.to} {newest.value}{selectedMetric?.unit}{'\uff0c'}{exerciseUi.improved} {newest.value - oldest.value}{selectedMetric?.unit}</p> : null}<div className="growth-record-form"><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /><input type="number" value={value} onChange={(event) => setValue(event.target.value)} placeholder={exerciseUi.value} /><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={exerciseUi.note} /><button className="primary-button" onClick={createRecord}>{exerciseUi.addRecord}</button></div>{metricRecords.length === 0 ? <p className="empty-text">{exerciseUi.noGrowthRecord}</p> : <div className="growth-record-list">{metricRecords.map((record) => <div key={record.id}><strong>{record.date}</strong><span>{record.value}{selectedMetric?.unit}</span><em>{record.note || exerciseUi.noNote}</em><button className="danger-button compact" onClick={() => void onDeleteRecord(record)}>{commonUi.delete}</button></div>)}</div>}</section></div>}</div>;
 }
 
 function ExerciseTimeDistribution({ sessions }: { sessions: Session[] }) {

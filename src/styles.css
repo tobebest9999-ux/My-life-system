@@ -2848,3 +2848,54 @@ textarea {
     grid-column: auto;
   }
 }
+/* Wider exercise distribution, tighter calendar */
+.exercise-home-page {
+  grid-template-columns: minmax(620px, 1.25fr) minmax(420px, 0.75fr);
+}
+
+.exercise-home-page .exercise-distribution-panel {
+  min-height: 320px;
+}
+
+.exercise-home-page .exercise-calendar-panel {
+  max-width: 700px;
+  justify-self: stretch;
+}
+
+.exercise-home-page .exercise-distribution {
+  gap: 28px;
+  padding: 10px 0 6px;
+}
+
+.exercise-home-page .exercise-progress-row {
+  grid-template-columns: 92px minmax(0, 1fr) 150px;
+  gap: 20px;
+  min-height: 44px;
+}
+
+.exercise-home-page .exercise-progress {
+  height: 16px;
+}
+
+.exercise-home-page .exercise-progress-row strong {
+  font-size: 21px;
+}
+
+.growth-record-list div {
+  grid-template-columns: 140px 120px minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+@media (max-width: 1180px) {
+  .exercise-home-page {
+    grid-template-columns: 1fr;
+  }
+
+  .exercise-home-page .exercise-calendar-panel {
+    max-width: none;
+  }
+
+  .growth-record-list div {
+    grid-template-columns: 1fr;
+  }
+}
