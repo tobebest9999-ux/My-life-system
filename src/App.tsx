@@ -1083,16 +1083,37 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
 }) {
   const exerciseProjects = projects.filter((project) => project.mainCategory === 'exercise');
   const exerciseSessions = sessions.filter((session) => session.mainCategory === 'exercise');
-  const [selectedProjectId, setSelectedProjectId] = useState(exerciseProjects[0]?.id ?? '');
+  const [view, setView] = useState<'home' | 'category' | 'project'>('home');
+  const [category, setCategory] = useState<ExerciseSubCategory>('strength');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const selectedProject = exerciseProjects.find((project) => project.id === selectedProjectId);
+  const openCategory = (nextCategory: ExerciseSubCategory) => { setCategory(nextCategory); setSelectedProjectId(''); setView('category'); };
+  const openProject = (projectId: string) => {
+    const project = exerciseProjects.find((item) => item.id === projectId);
+    if (!project) return;
+    setCategory(project.subCategory as ExerciseSubCategory);
+    setSelectedProjectId(project.id);
+    setView('project');
+  };
+  const deleteAndLeaveProject = async (project: Project) => { await onDeleteProject(project); setSelectedProjectId(''); setView('category'); };
 
   useEffect(() => {
-    if (!selectedProjectId && exerciseProjects[0]) setSelectedProjectId(exerciseProjects[0].id);
-    if (selectedProjectId && !exerciseProjects.some((project) => project.id === selectedProjectId)) setSelectedProjectId(exerciseProjects[0]?.id ?? '');
-  }, [selectedProjectId, exerciseProjects]);
+    if (selectedProjectId && !exerciseProjects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId('');
+      if (view === 'project') setView('category');
+    }
+  }, [selectedProjectId, exerciseProjects, view]);
+
+  if (view === 'project' && selectedProject) {
+    return <ExerciseProjectPage project={selectedProject} sessions={exerciseSessions.filter((session) => session.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onDeleteProject={deleteAndLeaveProject} onStartTimer={onStartTimer} onManualSession={onManualSession} />;
+  }
+
+  if (view === 'category') {
+    return <ExerciseCategoryBoard category={category} projects={exerciseProjects.filter((project) => project.subCategory === category)} sessions={exerciseSessions} activeTimer={activeTimer} onBack={() => setView('home')} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onOpenProject={openProject} />;
+  }
 
   return (
-    <div className="exercise-page">
+    <div className="exercise-page exercise-home-page">
       <section className="exercise-hero panel">
         <div>
           <p className="eyebrow">{T.stage}</p>
@@ -1106,9 +1127,9 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
         </div>
       </section>
 
-      <section className="panel exercise-quick-panel">
-        <h2>{exerciseUi.quickStart}</h2>
-        <ExerciseQuickStart projects={exerciseProjects} activeTimer={activeTimer} onStartTimer={onStartTimer} onCreateProject={onCreateProject} />
+      <section className="panel exercise-category-entry-panel">
+        <h2>{exerciseUi.projects}</h2>
+        <ExerciseCategoryEntrances projects={exerciseProjects} sessions={exerciseSessions} onOpenCategory={openCategory} />
       </section>
 
       <section className="panel exercise-distribution-panel">
@@ -1116,19 +1137,9 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
         <ExerciseTimeDistribution sessions={exerciseSessions} />
       </section>
 
-      <section className="panel exercise-projects-panel">
-        <h2>{exerciseUi.projects}</h2>
-        <ExerciseProjectLibrary projects={exerciseProjects} sessions={exerciseSessions} selectedProjectId={selectedProjectId} onSelectProject={setSelectedProjectId} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} activeTimer={activeTimer} />
-      </section>
-
-      <section className="panel exercise-detail-panel">
-        <h2>{exerciseUi.detail}</h2>
-        <ExerciseProjectDetail project={selectedProject} sessions={exerciseSessions.filter((session) => session.projectId === selectedProject?.id)} />
-      </section>
-
       <section className="panel exercise-calendar-panel">
         <h2>{exerciseUi.calendar}</h2>
-        <ExerciseWeekCalendar sessions={exerciseSessions} onSelectProject={setSelectedProjectId} />
+        <ExerciseMonthCalendar sessions={exerciseSessions} onOpenProject={openProject} />
       </section>
 
       <section className="panel exercise-plan-panel-wrap">
@@ -1142,6 +1153,30 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
       </section>
     </div>
   );
+}
+
+function ExerciseCategoryEntrances({ projects, sessions, onOpenCategory }: { projects: Project[]; sessions: Session[]; onOpenCategory: (category: ExerciseSubCategory) => void }) {
+  const total = sessions.reduce((sum, session) => sum + session.durationMinutes, 0);
+  return <div className="exercise-category-entrances">{exerciseSubCategoryOptions.map((category) => { const categoryProjects = projects.filter((project) => project.subCategory === category); const categorySessions = sessions.filter((session) => session.subCategory === category); const minutes = categorySessions.reduce((sum, session) => sum + session.durationMinutes, 0); const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; const recent = categoryProjects[0]; return <button key={category} className={'exercise-category-entry ' + category} onClick={() => onOpenCategory(category)}><div><strong>{exerciseSubCategoryLabels[category]}</strong><span>{categoryProjects.length} {'\u4e2a\u9879\u76ee'}</span></div><p>{recent ? '\u6700\u8fd1\uff1a' + recent.name : '\u6682\u65e0\u9879\u76ee'}</p><div className="exercise-progress"><div className={category} style={{ width: percent + '%' }} /></div><footer><span>{formatDuration(minutes)}</span><em>{percent}%</em></footer></button>; })}</div>;
+}
+
+function ExerciseCategoryBoard({ category, projects, sessions, activeTimer, onBack, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onOpenProject }: {
+  category: ExerciseSubCategory;
+  projects: Project[];
+  sessions: Session[];
+  activeTimer: ActiveTimer | null;
+  onBack: () => void;
+  onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onDeleteProject: (project: Project) => Promise<void>;
+  onStartTimer: (project: Project) => Promise<void>;
+  onManualSession: (preset: ManualPreset) => void;
+  onOpenProject: (projectId: string) => void;
+}) {
+  return <div className="notion-page exercise-category-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{exerciseUi.pageTitle} / {exerciseSubCategoryLabels[category]}</div><h2>{exerciseSubCategoryLabels[category]}</h2><p>{'\u8fd9\u91cc\u53ea\u653e\u8fd9\u4e2a\u8fd0\u52a8\u7c7b\u578b\u4e0b\u7684\u9879\u76ee\uff0c\u70b9\u51fb\u9879\u76ee\u8fdb\u5165\u8be6\u60c5\u9875\u3002'}</p></section><section className="panel exercise-projects-panel category-projects-panel"><ExerciseProjectLibrary projects={projects} sessions={sessions} selectedProjectId="" activeTimer={activeTimer} onOpenProject={onOpenProject} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} singleCategory={category} /></section></div>;
+}
+
+function ExerciseProjectPage({ project, sessions, activeTimer, onBack, onDeleteProject, onStartTimer, onManualSession }: { project: Project; sessions: Session[]; activeTimer: ActiveTimer | null; onBack: () => void; onDeleteProject: (project: Project) => Promise<void>; onStartTimer: (project: Project) => Promise<void>; onManualSession: (preset: ManualPreset) => void }) {
+  return <div className="notion-page exercise-project-page"><section className="notion-doc-title"><div className="notion-title-actions"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><button className="danger-button compact" onClick={() => void onDeleteProject(project)}>{commonUi.delete}</button></div><div className="notion-breadcrumb">{exerciseUi.pageTitle} / {exerciseSubCategoryLabels[project.subCategory as ExerciseSubCategory]} / {project.name}</div><h2>{project.name}</h2></section><section className="notebook-toolbar"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory: 'exercise', subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button></section><section className="panel"><ExerciseProjectDetail project={project} sessions={sessions} /></section></div>;
 }
 
 function ExerciseQuickStart({ projects, activeTimer, onStartTimer, onCreateProject }: { projects: Project[]; activeTimer: ActiveTimer | null; onStartTimer: (project: Project) => Promise<void>; onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project> }) {
@@ -1159,27 +1194,29 @@ function ExerciseQuickStart({ projects, activeTimer, onStartTimer, onCreateProje
   return <div className="exercise-quick-start"><SelectExerciseSubCategory value={subCategory} onChange={(value) => { setSubCategory(value); setProjectId(''); }} /><label><span>{exerciseUi.selectProject}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{exerciseUi.noProjectOption}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label><span>{exerciseUi.newProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={exerciseUi.newProjectPlaceholder} /></label><button className="primary-button" disabled={Boolean(activeTimer)} onClick={start}>{exerciseUi.start}</button></div>;
 }
 
-function ExerciseProjectLibrary({ projects, sessions, selectedProjectId, activeTimer, onSelectProject, onCreateProject, onDeleteProject, onStartTimer, onManualSession }: {
+function ExerciseProjectLibrary({ projects, sessions, selectedProjectId, activeTimer, onOpenProject, onCreateProject, onDeleteProject, onStartTimer, onManualSession, singleCategory }: {
   projects: Project[];
   sessions: Session[];
   selectedProjectId: string;
   activeTimer: ActiveTimer | null;
-  onSelectProject: (id: string) => void;
+  onOpenProject: (id: string) => void;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
   onDeleteProject: (project: Project) => Promise<void>;
   onStartTimer: (project: Project) => Promise<void>;
   onManualSession: (preset: ManualPreset) => void;
+  singleCategory?: ExerciseSubCategory;
 }) {
-  return <div className="exercise-project-library">{exerciseSubCategoryOptions.map((category) => <ExerciseProjectSection key={category} category={category} projects={projects.filter((project) => project.subCategory === category)} sessions={sessions} selectedProjectId={selectedProjectId} activeTimer={activeTimer} onSelectProject={onSelectProject} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} />)}</div>;
+  const categories = singleCategory ? [singleCategory] : exerciseSubCategoryOptions;
+  return <div className="exercise-project-library">{categories.map((category) => <ExerciseProjectSection key={category} category={category} projects={projects.filter((project) => project.subCategory === category)} sessions={sessions} selectedProjectId={selectedProjectId} activeTimer={activeTimer} onOpenProject={onOpenProject} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} />)}</div>;
 }
 
-function ExerciseProjectSection({ category, projects, sessions, selectedProjectId, activeTimer, onSelectProject, onCreateProject, onDeleteProject, onStartTimer, onManualSession }: {
+function ExerciseProjectSection({ category, projects, sessions, selectedProjectId, activeTimer, onOpenProject, onCreateProject, onDeleteProject, onStartTimer, onManualSession }: {
   category: ExerciseSubCategory;
   projects: Project[];
   sessions: Session[];
   selectedProjectId: string;
   activeTimer: ActiveTimer | null;
-  onSelectProject: (id: string) => void;
+  onOpenProject: (id: string) => void;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
   onDeleteProject: (project: Project) => Promise<void>;
   onStartTimer: (project: Project) => Promise<void>;
@@ -1190,9 +1227,9 @@ function ExerciseProjectSection({ category, projects, sessions, selectedProjectI
     if (!name.trim()) return;
     const project = await onCreateProject({ name: name.trim(), mainCategory: 'exercise', subCategory: category, status: 'active' });
     setName('');
-    onSelectProject(project.id);
+    onOpenProject(project.id);
   };
-  return <div className="exercise-project-section"><div className="section-heading"><h3>{exerciseSubCategoryLabels[category]}</h3></div><div className="inline-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.newProjectPlaceholder} /><button className="secondary-button compact" onClick={create}>{exerciseUi.create}</button></div>{projects.length === 0 ? <p className="empty-text">{exerciseUi.noProject}</p> : <div className="exercise-project-list">{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = projectSessions.reduce((sum, session) => sum + session.durationMinutes, 0); return <article key={project.id} className={project.id === selectedProjectId ? 'exercise-project-card active' : 'exercise-project-card'} onClick={() => onSelectProject(project.id)}><strong>{project.name}</strong><span>{projectSessions.length} {exerciseUi.times} / {formatDuration(total)}</span><div className="exercise-card-actions"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={(event) => { event.stopPropagation(); void onStartTimer(project); }}>{T.startTimer}</button><button className="secondary-button compact" onClick={(event) => { event.stopPropagation(); onManualSession({ mainCategory: 'exercise', subCategory: category, projectId: project.id }); }}>{T.manualSession}</button><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteProject(project); }}>{commonUi.delete}</button></div></article>; })}</div>}</div>;
+  return <div className="exercise-project-section"><div className="section-heading"><h3>{exerciseSubCategoryLabels[category]}</h3></div><div className="inline-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.newProjectPlaceholder} /><button className="secondary-button compact" onClick={create}>{exerciseUi.create}</button></div>{projects.length === 0 ? <p className="empty-text">{exerciseUi.noProject}</p> : <div className="exercise-project-list">{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = projectSessions.reduce((sum, session) => sum + session.durationMinutes, 0); return <article key={project.id} className={project.id === selectedProjectId ? 'exercise-project-card active' : 'exercise-project-card'} onClick={() => onOpenProject(project.id)}><strong>{project.name}</strong><span>{projectSessions.length} {exerciseUi.times} / {formatDuration(total)}</span><div className="exercise-card-actions"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={(event) => { event.stopPropagation(); void onStartTimer(project); }}>{T.startTimer}</button><button className="secondary-button compact" onClick={(event) => { event.stopPropagation(); onManualSession({ mainCategory: 'exercise', subCategory: category, projectId: project.id }); }}>{T.manualSession}</button><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteProject(project); }}>{commonUi.delete}</button></div></article>; })}</div>}</div>;
 }
 
 function ExerciseProjectDetail({ project, sessions }: { project?: Project; sessions: Session[] }) {
@@ -1207,12 +1244,12 @@ function ExerciseSessionCard({ session }: { session: Session }) {
   return <article className="exercise-session-card"><div className="daily-session-card-head"><strong>{formatDateTime(session.startTime)} - {formatDateTime(session.endTime)}</strong><span>{formatDuration(session.durationMinutes)}</span></div><div className="daily-session-field"><b>{exerciseUi.completedGoal}</b><span>{session.content || exerciseUi.empty}</span></div><div className="daily-session-field"><b>{exerciseUi.feeling}</b><span>{session.feelings || exerciseUi.empty}</span></div>{(typeof session.moodScore === 'number' || typeof session.energyScore === 'number') ? <div className="daily-session-meta">{typeof session.moodScore === 'number' ? T.moodScore + ' ' + session.moodScore + '/5' : ''}{typeof session.moodScore === 'number' && typeof session.energyScore === 'number' ? ' / ' : ''}{typeof session.energyScore === 'number' ? T.energyScore + ' ' + session.energyScore + '/5' : ''}</div> : null}{session.attachments?.length ? <div className="daily-session-images">{session.attachments.map((image) => <img key={image.id} src={image.data} alt={exerciseUi.completedGoal} />)}</div> : null}</article>;
 }
 
-function ExerciseWeekCalendar({ sessions, onSelectProject }: { sessions: Session[]; onSelectProject: (id: string) => void }) {
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+function ExerciseMonthCalendar({ sessions, onOpenProject }: { sessions: Session[]; onOpenProject: (id: string) => void }) {
+  const [monthCursor, setMonthCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
-  const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  const cells = buildExerciseMonthCells(monthCursor);
   const selectedSessions = sessions.filter((session) => toDateKey(new Date(session.startTime)) === selectedDate);
-  return <div className="exercise-calendar"><div className="calendar-toolbar"><button className="secondary-button compact" onClick={() => setWeekStart(addDays(weekStart, -7))}>{exerciseUi.previousWeek}</button><strong>{formatDate(days[0].toISOString())} - {formatDate(days[6].toISOString())}</strong><button className="secondary-button compact" onClick={() => setWeekStart(addDays(weekStart, 7))}>{exerciseUi.nextWeek}</button></div><div className="exercise-week-grid">{days.map((date) => { const key = toDateKey(date); const daySessions = sessions.filter((session) => toDateKey(new Date(session.startTime)) === key); const marker = getExerciseDayMarker(daySessions); return <button key={key} className={'exercise-day ' + marker + (selectedDate === key ? ' selected' : '')} onClick={() => setSelectedDate(key)}><span>{new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(date)}</span><strong>{date.getDate()}</strong><em>{daySessions.length > 0 ? daySessions.length + ' ' + exerciseUi.times : exerciseUi.rest}</em></button>; })}</div><div className="selected-exercise-day"><h3>{selectedDate}</h3>{selectedSessions.length === 0 ? <p className="empty-text">{exerciseUi.dayEmpty}</p> : selectedSessions.map((session) => <button className="exercise-day-record" key={session.id} onClick={() => onSelectProject(session.projectId)}><strong>{session.projectNameSnapshot}</strong><span>{exerciseSubCategoryLabels[session.subCategory as ExerciseSubCategory] ?? session.subCategory} / {formatDuration(session.durationMinutes)}</span><em>{session.content || exerciseUi.noGoal}</em></button>)}</div></div>;
+  return <div className="exercise-calendar exercise-month-calendar"><div className="calendar-toolbar"><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>{exerciseUi.previousMonth}</button><strong>{monthCursor.getFullYear()}{'\u5e74'}{monthCursor.getMonth() + 1}{'\u6708'}</strong><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>{exerciseUi.nextMonth}</button></div><div className="exercise-month-weekdays">{['\u5468\u4e00','\u5468\u4e8c','\u5468\u4e09','\u5468\u56db','\u5468\u4e94','\u5468\u516d','\u5468\u65e5'].map((day) => <span key={day}>{day}</span>)}</div><div className="exercise-month-grid">{cells.map((date, index) => { if (!date) return <span key={'empty-' + index} className="exercise-month-empty" />; const key = toDateKey(date); const daySessions = sessions.filter((session) => toDateKey(new Date(session.startTime)) === key); const marker = getExerciseDayMarker(daySessions); return <button key={key} className={'exercise-month-day ' + marker + (selectedDate === key ? ' selected' : '')} onClick={() => setSelectedDate(key)}><strong>{date.getDate()}</strong>{daySessions.length > 0 ? <span>{daySessions.length} {exerciseUi.times}</span> : <em>{exerciseUi.rest}</em>}</button>; })}</div><div className="selected-exercise-day"><h3>{selectedDate}</h3>{selectedSessions.length === 0 ? <p className="empty-text">{exerciseUi.dayEmpty}</p> : selectedSessions.map((session) => <button className="exercise-day-record" key={session.id} onClick={() => onOpenProject(session.projectId)}><strong>{session.projectNameSnapshot}</strong><span>{exerciseSubCategoryLabels[session.subCategory as ExerciseSubCategory] ?? session.subCategory} / {formatDuration(session.durationMinutes)}</span><em>{session.content || exerciseUi.noGoal}</em></button>)}</div></div>;
 }
 
 function ExercisePlanPanel({ projects, plans, onSavePlan }: { projects: Project[]; plans: ExercisePlan[]; onSavePlan: (plan: ExercisePlan) => Promise<void> }) {
@@ -1313,6 +1350,13 @@ function getExerciseDayMarker(sessions: Session[]) {
   const types = new Set(sessions.map((session) => session.subCategory));
   if (types.size > 1) return 'mixed';
   return Array.from(types)[0] || 'none';
+}
+
+function buildExerciseMonthCells(monthCursor: Date) {
+  const first = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+  const offset = (first.getDay() + 6) % 7;
+  const days = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0).getDate();
+  return [...Array(offset).fill(null), ...Array.from({ length: days }, (_, index) => new Date(monthCursor.getFullYear(), monthCursor.getMonth(), index + 1))] as (Date | null)[];
 }
 
 function buildMonthCells(monthCursor: Date) {

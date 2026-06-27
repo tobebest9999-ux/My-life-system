@@ -2599,3 +2599,153 @@ textarea {
 .growth-metric-row .danger-button {
   align-self: center;
 }
+.exercise-home-page .exercise-category-entry-panel,
+.exercise-home-page .exercise-calendar-panel,
+.exercise-home-page .exercise-plan-panel-wrap,
+.exercise-home-page .exercise-growth-panel-wrap {
+  grid-column: 1 / -1;
+}
+
+.exercise-category-entrances {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.exercise-category-entry {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  min-height: 170px;
+  border: 1px solid #dce7e1;
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.exercise-category-entry:hover {
+  border-color: #19736a;
+  transform: translateY(-1px);
+}
+
+.exercise-category-entry div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.exercise-category-entry strong {
+  font-size: 24px;
+}
+
+.exercise-category-entry span,
+.exercise-category-entry p,
+.exercise-category-entry em {
+  color: #65736d;
+  font-style: normal;
+}
+
+.exercise-category-entry footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.exercise-category-page .category-projects-panel {
+  margin-top: 16px;
+}
+
+.exercise-category-page .exercise-project-library {
+  grid-template-columns: 1fr;
+}
+
+.exercise-project-page .panel {
+  margin-top: 16px;
+}
+
+.exercise-month-calendar {
+  gap: 12px;
+}
+
+.exercise-month-weekdays,
+.exercise-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.exercise-month-weekdays span {
+  color: #66736e;
+  font-weight: 800;
+  text-align: center;
+}
+
+.exercise-month-day,
+.exercise-month-empty {
+  min-height: 92px;
+  border-radius: 8px;
+}
+
+.exercise-month-day {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #dfe8e3;
+  background: #fff;
+  color: #172520;
+  text-align: left;
+}
+
+.exercise-month-day strong {
+  font-size: 22px;
+}
+
+.exercise-month-day span,
+.exercise-month-day em {
+  color: #66736e;
+  font-style: normal;
+  font-size: 14px;
+}
+
+.exercise-month-empty {
+  border: 1px dashed transparent;
+}
+
+.exercise-month-day.strength {
+  background: #fff0f0;
+  border-color: #ec9a9a;
+}
+
+.exercise-month-day.cardio {
+  background: #eef5ff;
+  border-color: #91b8ef;
+}
+
+.exercise-month-day.other {
+  background: #eff8ef;
+  border-color: #92c995;
+}
+
+.exercise-month-day.mixed {
+  background: #fff7cf;
+  border-color: #e2bd40;
+}
+
+.exercise-month-day.selected {
+  outline: 3px solid rgba(25, 115, 106, 0.22);
+  border-color: #19736a;
+}
+
+@media (max-width: 900px) {
+  .exercise-category-entrances {
+    grid-template-columns: 1fr;
+  }
+
+  .exercise-month-weekdays,
+  .exercise-month-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
