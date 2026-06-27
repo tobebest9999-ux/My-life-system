@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type ReactNode } from 'react';
 import {
   defaultSubCategory,
   mainCategoryLabels,
@@ -16,6 +16,7 @@ import type {
   PlanTargetType,
   Project,
   ProjectImage,
+  ProjectJournalEntry,
   ProjectStatus,
   Session,
   WeeklyPlan,
@@ -163,6 +164,7 @@ function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [weeklyPlans, setWeeklyPlans] = useState<WeeklyPlan[]>([]);
   const [images, setImages] = useState<ProjectImage[]>([]);
+  const [journalEntries, setJournalEntries] = useState<ProjectJournalEntry[]>([]);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [quickStartCategory, setQuickStartCategory] = useState<MainCategory>('entertainment');
@@ -170,17 +172,19 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   const reload = async () => {
-    const [storedProjects, storedSessions, storedPlans, storedImages, storedTimer] = await Promise.all([
+    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedTimer] = await Promise.all([
       storage.getProjects(),
       storage.getSessions(),
       storage.getWeeklyPlans(),
       storage.getProjectImages(),
+      storage.getProjectJournalEntries(),
       storage.getActiveTimer(),
     ]);
     setProjects(sortByCreated(storedProjects));
     setSessions(sortByCreated(storedSessions));
     setWeeklyPlans(sortByCreated(storedPlans));
     setImages(storedImages);
+    setJournalEntries(storedJournalEntries);
     setActiveTimer(storedTimer);
     setLoading(false);
   };
@@ -291,6 +295,14 @@ function App() {
     await reload();
   };
 
+  const saveJournalEntry = async (entry: ProjectJournalEntry) => {
+    await storage.saveProjectJournalEntry(entry);
+    setJournalEntries((current) => {
+      const next = current.filter((item) => item.id !== entry.id);
+      return sortByCreated([...next, entry]);
+    });
+  };
+
   const openManual = (preset: ManualPreset = {}) => {
     setManualPreset(preset);
     setDialog('manualSession');
@@ -351,7 +363,9 @@ function App() {
             onUpdateProject={updateProject}
             onStartTimer={startTimer}
             onManualSession={openManual}
+            journalEntries={journalEntries}
             onAddImage={addImage}
+            onSaveJournalEntry={saveJournalEntry}
             onSavePlan={savePlan}
           />
         ) : null}
@@ -386,28 +400,32 @@ function DashboardPage({ projects, sessions, plans, activeTimer, onQuickStart, o
   const totals = useMemo(() => summarizeByMainCategory(sessions), [sessions]);
   const suggestions = useMemo(() => generateDashboardSuggestions(sessions, plans), [sessions, plans]);
   return (
-    <div className="dashboard-grid dashboard-grid-compact-calendar">
-      <section className="panel span-2">
-        <div className="section-heading"><h2>{T.quickStart}</h2><button className="ghost-button" onClick={onManualSession}>{T.manualSession}</button></div>
-        <div className="quick-grid">
-          {mainCategoryOptions.map((category) => <button key={category} className="quick-button" onClick={() => onQuickStart(category)}>{'开始' + mainCategoryLabels[category]}</button>)}
-        </div>
-      </section>
-      <section className="panel dashboard-calendar-corner"><DashboardCalendar sessions={sessions} plans={plans} /></section>
-      <section className="panel">
-        <h2>{T.activeTimer}</h2>
-        {activeTimer ? <ActiveTimerCard timer={activeTimer} onEndTimer={onEndTimer} /> : <p className="empty-text">{T.noActiveTimer}</p>}
-      </section>
-      <section className="panel span-2">
-        <h2>{T.timeDistribution}</h2>
-        <PieTimeDistribution totals={totals} />
-      </section>
-      <section className="panel">
-        <h2>{T.recentRecords}</h2>
-        {sessions.length === 0 ? <p className="empty-text">{T.noRecords}</p> : <SessionList sessions={sessions.slice(0, 6)} />}
-      </section>
-      <section className="panel"><h2>{T.suggestions}</h2><div className="suggestion-list">{suggestions.map((item) => <div className={'suggestion ' + item.severity} key={item.id}>{item.message}</div>)}</div></section>
-      <section className="panel span-2"><WeeklyPlanPanel projects={projects} plans={plans} onSavePlan={onSavePlan} /></section>
+    <div className="dashboard-fill-layout">
+      <div className="dashboard-main-stack">
+        <section className="panel">
+          <div className="section-heading"><h2>{T.quickStart}</h2><button className="ghost-button" onClick={onManualSession}>{T.manualSession}</button></div>
+          <div className="quick-grid">
+            {mainCategoryOptions.map((category) => <button key={category} className="quick-button" onClick={() => onQuickStart(category)}>{'\u5f00\u59cb' + mainCategoryLabels[category]}</button>)}
+          </div>
+        </section>
+        <section className="panel">
+          <h2>{T.timeDistribution}</h2>
+          <PieTimeDistribution totals={totals} />
+        </section>
+        <section className="panel"><WeeklyPlanPanel projects={projects} plans={plans} onSavePlan={onSavePlan} /></section>
+      </div>
+      <div className="dashboard-side-stack">
+        <section className="panel dashboard-calendar-corner"><DashboardCalendar sessions={sessions} plans={plans} /></section>
+        <section className="panel">
+          <h2>{T.activeTimer}</h2>
+          {activeTimer ? <ActiveTimerCard timer={activeTimer} onEndTimer={onEndTimer} /> : <p className="empty-text">{T.noActiveTimer}</p>}
+        </section>
+        <section className="panel">
+          <h2>{T.recentRecords}</h2>
+          {sessions.length === 0 ? <p className="empty-text">{T.noRecords}</p> : <SessionList sessions={sessions.slice(0, 6)} />}
+        </section>
+        <section className="panel"><h2>{T.suggestions}</h2><div className="suggestion-list">{suggestions.map((item) => <div className={'suggestion ' + item.severity} key={item.id}>{item.message}</div>)}</div></section>
+      </div>
     </div>
   );
 }
@@ -584,10 +602,11 @@ function PlanRow({ plan, projects, onSavePlan }: { plan: WeeklyPlan; projects: P
   return <div className="plan-row"><div><div className="plan-title">{plan.title}</div><div className="meta-line">{plan.mainCategory ? mainCategoryLabels[plan.mainCategory] : T.noRelatedCategory}{project ? ' / ' + project.name : ''}{plan.deadline ? ' / ' + T.deadline + ' ' + formatDate(plan.deadline) : ''}</div></div><div className="plan-controls"><span className={'status-pill ' + plan.status}>{planStatusLabels[plan.status]}</span><input aria-label={T.currentProgress} type="number" min="0" value={progress} onChange={(event) => setProgress(event.target.value)} /><button className="secondary-button compact" onClick={() => onSavePlan({ ...plan, currentProgress: Number(progress || 0) })}>{T.updateProgress}</button><button className="secondary-button compact" onClick={() => onSavePlan({ ...plan, status: 'completed' })}>{T.markCompleted}</button><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'skipped' })}>{T.skip}</button></div></div>;
 }
 
-function EntertainmentPage({ projects, sessions, images, plans, activeTimer, onCreateProject, onUpdateProject, onStartTimer, onManualSession, onAddImage, onSavePlan }: {
+function EntertainmentPage({ projects, sessions, images, journalEntries, plans, activeTimer, onCreateProject, onUpdateProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSavePlan }: {
   projects: Project[];
   sessions: Session[];
   images: ProjectImage[];
+  journalEntries: ProjectJournalEntry[];
   plans: WeeklyPlan[];
   activeTimer: ActiveTimer | null;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
@@ -595,6 +614,7 @@ function EntertainmentPage({ projects, sessions, images, plans, activeTimer, onC
   onStartTimer: (project: Project) => Promise<void>;
   onManualSession: (preset: ManualPreset) => void;
   onAddImage: (project: Project, data: string, caption?: string) => Promise<void>;
+  onSaveJournalEntry: (entry: ProjectJournalEntry) => Promise<void>;
   onSavePlan: (plan: WeeklyPlan) => Promise<void>;
 }) {
   const [view, setView] = useState<'home' | 'category' | 'project'>('home');
@@ -605,7 +625,7 @@ function EntertainmentPage({ projects, sessions, images, plans, activeTimer, onC
   const enterCategory = (nextCategory: string) => { setCategory(nextCategory); setSelectedId(''); setView('category'); };
   const enterProject = (id: string) => { setSelectedId(id); setView('project'); };
   if (view === 'project' && selectedProject) {
-    return <ProjectDetail project={selectedProject} sessions={sessions.filter((session) => session.projectId === selectedProject.id)} images={images.filter((image) => image.projectId === selectedProject.id)} plans={plans.filter((plan) => plan.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onUpdateProject={onUpdateProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onAddImage={onAddImage} onSavePlan={onSavePlan} />;
+    return <ProjectDetail project={selectedProject} sessions={sessions.filter((session) => session.projectId === selectedProject.id)} images={images.filter((image) => image.projectId === selectedProject.id)} journalEntries={journalEntries.filter((entry) => entry.projectId === selectedProject.id)} plans={plans.filter((plan) => plan.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onUpdateProject={onUpdateProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onAddImage={onAddImage} onSaveJournalEntry={onSaveJournalEntry} onSavePlan={onSavePlan} />;
   }
   if (view === 'category') {
     return <EntertainmentCategoryBoard category={category} projects={entertainmentProjects.filter((project) => project.subCategory === category)} sessions={sessions} plans={plans} onBack={() => setView('home')} onCreateProject={onCreateProject} onOpenProject={enterProject} />;
@@ -646,10 +666,11 @@ function EntertainmentProjectForm({ subCategory, onCreateProject }: { subCategor
   return <section className="notion-inline-create"><div className="notion-section-title"><h3>新建项目</h3><span>inline database toolbar</span></div><div className="notion-create-row"><label><span>{T.projectName}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={T.projectPlaceholder} /></label><label><span>{T.projectStatus}</span><select value={status} onChange={(event) => setStatus(event.target.value as ProjectStatus)}>{projectStatusOptions.map((option) => <option key={option} value={option}>{projectStatusLabels[option]}</option>)}</select></label><label><span>{T.imageUrl}</span><input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} /></label><button className="primary-button" onClick={submit}>{T.createProject}</button></div>{error ? <p className="error-text">{error}</p> : null}</section>;
 }
 
-function ProjectDetail({ project, sessions, images, plans, activeTimer, onBack, onUpdateProject, onStartTimer, onManualSession, onAddImage, onSavePlan }: {
+function ProjectDetail({ project, sessions, images, journalEntries, plans, activeTimer, onBack, onUpdateProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSavePlan }: {
   project?: Project;
   sessions: Session[];
   images: ProjectImage[];
+  journalEntries: ProjectJournalEntry[];
   plans: WeeklyPlan[];
   activeTimer: ActiveTimer | null;
   onBack: () => void;
@@ -657,27 +678,150 @@ function ProjectDetail({ project, sessions, images, plans, activeTimer, onBack, 
   onStartTimer: (project: Project) => Promise<void>;
   onManualSession: (preset: ManualPreset) => void;
   onAddImage: (project: Project, data: string, caption?: string) => Promise<void>;
+  onSaveJournalEntry: (entry: ProjectJournalEntry) => Promise<void>;
   onSavePlan: (plan: WeeklyPlan) => Promise<void>;
 }) {
-  const [notes, setNotes] = useState(project?.notes ?? '');
-  const [caption, setCaption] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
   const [reminderTime, setReminderTime] = useState('');
   const [reminderTitle, setReminderTitle] = useState('');
-  useEffect(() => setNotes(project?.notes ?? ''), [project?.id, project?.notes]);
   if (!project) return <div className="detail-panel"><p className="empty-text">{T.chooseOrCreateDetail}</p></div>;
   const total = sessions.reduce((sum, session) => sum + session.durationMinutes, 0);
   const latest = sessions[0];
   const nextPlan = plans.filter((plan) => getEffectivePlanStatus(plan) === 'active' && plan.deadline).sort((a, b) => new Date(a.deadline || '').getTime() - new Date(b.deadline || '').getTime())[0];
-  const uploadFile = (file?: File) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => { if (typeof reader.result === 'string') void onAddImage(project, reader.result, caption); };
-    reader.readAsDataURL(file);
-  };
-  const addUrl = async () => { if (!imageUrl.trim()) return; await onAddImage(project, imageUrl.trim(), caption); setImageUrl(''); setCaption(''); };
   const addReminder = async () => { if (!reminderTime) return; const timestamp = nowIso(); await onSavePlan({ id: createId(), title: reminderTitle.trim() || '进行 ' + project.name, mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id, deadline: fromInputDateTime(reminderTime), targetType: 'completion', currentProgress: 0, status: 'active', createdAt: timestamp, updatedAt: timestamp }); setReminderTime(''); setReminderTitle(''); };
-  return <div className="notion-page notion-project-page"><section className="notion-doc-title"><button className="notion-back" onClick={onBack}>← 返回列表</button><div className="notion-breadcrumb">娱乐 / {getSubCategoryLabel(project.mainCategory, project.subCategory)} / {project.name}</div><h2>{project.name}</h2><div className="notion-properties"><div><span>状态</span><select value={project.status} onChange={(event) => onUpdateProject({ ...project, status: event.target.value as ProjectStatus })}>{projectStatusOptions.map((option) => <option key={option} value={option}>{projectStatusLabels[option]}</option>)}</select></div><div><span>分类</span><strong>{getSubCategoryLabel(project.mainCategory, project.subCategory)}</strong></div><div><span>总时长</span><strong>{formatDuration(total)}</strong></div><div><span>最近记录</span><strong>{latest ? formatDateTime(latest.startTime) : '暂无记录'}</strong></div><div><span>下次提醒</span><strong>{nextPlan ? formatDateTime(nextPlan.deadline || nextPlan.createdAt) : '暂无提醒'}</strong></div></div></section><section className="notion-action-strip"><button className="primary-button" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button" onClick={() => onManualSession({ mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button></section><section className="notion-block"><h3>项目笔记</h3><TextArea label={T.notes} value={notes} onChange={setNotes} /><button className="secondary-button" onClick={() => onUpdateProject({ ...project, notes })}>{T.saveNotes}</button></section><section className="notion-block"><h3>项目提醒</h3><div className="notion-create-row"><label><span>提醒时间</span><input type="datetime-local" value={reminderTime} onChange={(event) => setReminderTime(event.target.value)} /></label><label><span>提醒内容</span><input value={reminderTitle} onChange={(event) => setReminderTitle(event.target.value)} placeholder={'进行 ' + project.name} /></label><button className="secondary-button" onClick={addReminder}>保存提醒</button></div>{plans.length === 0 ? <p className="empty-text">暂无提醒</p> : <div className="notion-reminder-list">{plans.map((plan) => <div key={plan.id}><span>{plan.title}</span><strong>{plan.deadline ? formatDateTime(plan.deadline) : planStatusLabels[getEffectivePlanStatus(plan)]}</strong></div>)}</div>}</section><section className="notion-block"><h3>时间记录</h3>{sessions.length === 0 ? <p className="empty-text">{T.noSession}</p> : <div className="project-table-wrap notion-table-wrap"><table className="project-table notion-table"><thead><tr><th>日期</th><th>时间段</th><th>时长</th><th>做了什么</th><th>事后感受</th></tr></thead><tbody>{sessions.map((session) => <tr key={session.id}><td>{formatDate(session.startTime)}</td><td>{formatDateTime(session.startTime)} - {formatDateTime(session.endTime)}</td><td>{formatDuration(session.durationMinutes)}</td><td>{session.content || T.noContent}</td><td>{session.feelings || T.noContent}</td></tr>)}</tbody></table></div>}</section><section className="notion-block"><h3>项目图片</h3><div className="image-upload-row"><input value={caption} onChange={(event) => setCaption(event.target.value)} placeholder={T.imageCaption} /><input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder={T.imageUrl} /><button className="secondary-button" onClick={addUrl}>{T.addUrl}</button><label className="file-button">{T.addImage}<input type="file" accept="image/*" onChange={(event) => uploadFile(event.target.files?.[0])} /></label></div>{images.length > 0 ? <div className="image-grid">{images.map((image) => <figure key={image.id}><img src={image.data} alt={image.caption || T.projectImages} />{image.caption ? <figcaption>{image.caption}</figcaption> : null}</figure>)}</div> : <p className="empty-text">暂无图片</p>}</section></div>;
+  return <div className="notion-page notion-project-page notebook-project-page"><section className="notion-doc-title"><button className="notion-back" onClick={onBack}>← 返回列表</button><div className="notion-breadcrumb">娱乐 / {getSubCategoryLabel(project.mainCategory, project.subCategory)} / {project.name}</div><h2>{project.name}</h2><div className="notion-properties"><div><span>状态</span><select value={project.status} onChange={(event) => onUpdateProject({ ...project, status: event.target.value as ProjectStatus })}>{projectStatusOptions.map((option) => <option key={option} value={option}>{projectStatusLabels[option]}</option>)}</select></div><div><span>分类</span><strong>{getSubCategoryLabel(project.mainCategory, project.subCategory)}</strong></div><div><span>总时长</span><strong>{formatDuration(total)}</strong></div><div><span>最近记录</span><strong>{latest ? formatDateTime(latest.startTime) : '暂无记录'}</strong></div><div><span>下次提醒</span><strong>{nextPlan ? formatDateTime(nextPlan.deadline || nextPlan.createdAt) : '暂无提醒'}</strong></div></div></section><section className="notebook-toolbar"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button><label><span>提醒时间</span><input type="datetime-local" value={reminderTime} onChange={(event) => setReminderTime(event.target.value)} /></label><label><span>提醒内容</span><input value={reminderTitle} onChange={(event) => setReminderTitle(event.target.value)} placeholder={'进行 ' + project.name} /></label><button className="secondary-button compact" onClick={addReminder}>保存提醒</button></section><ProjectNotebook project={project} sessions={sessions} journalEntries={journalEntries} onSaveJournalEntry={onSaveJournalEntry} /><section className="notion-block legacy-images"><details><summary>历史图片</summary>{images.length > 0 ? <div className="image-grid">{images.map((image) => <figure key={image.id}><img src={image.data} alt={image.caption || T.projectImages} />{image.caption ? <figcaption>{image.caption}</figcaption> : null}</figure>)}</div> : <p className="empty-text">暂无历史图片</p>}</details></section></div>;
+}
+
+function ProjectNotebook({ project, sessions, journalEntries, onSaveJournalEntry }: {
+  project: Project;
+  sessions: Session[];
+  journalEntries: ProjectJournalEntry[];
+  onSaveJournalEntry: (entry: ProjectJournalEntry) => Promise<void>;
+}) {
+  const today = toDateKey(new Date());
+  const entryByDate = new Map(journalEntries.map((entry) => [entry.date, entry]));
+  const archivedEntries = journalEntries
+    .filter((entry) => entry.date !== today && hasMeaningfulJournalContent(entry.contentHtml))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const entriesToShow = [today, ...archivedEntries.map((entry) => entry.date)];
+
+  return (
+    <section className="project-notebook paper-notebook" aria-label={'\u9879\u76ee\u65e5\u8bb0'}>
+      {entriesToShow.map((date) => {
+        const entry = entryByDate.get(date);
+        const daySessions = sessions.filter((session) => toDateKey(new Date(session.startTime)) === date);
+        return <DailyJournalPage key={date} project={project} date={date} entry={entry} sessions={daySessions} onSaveJournalEntry={onSaveJournalEntry} />;
+      })}
+    </section>
+  );
+}
+
+function DailyJournalPage({ project, date, entry, sessions, onSaveJournalEntry }: {
+  project: Project;
+  date: string;
+  entry?: ProjectJournalEntry;
+  sessions: Session[];
+  onSaveJournalEntry: (entry: ProjectJournalEntry) => Promise<void>;
+}) {
+  const [contentHtml, setContentHtml] = useState(entry?.contentHtml ?? '');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const saveTimerRef = useRef<number | null>(null);
+
+  useEffect(() => setContentHtml(entry?.contentHtml ?? ''), [entry?.id, entry?.contentHtml, date]);
+  useEffect(() => () => { if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current); }, []);
+
+  const save = async (nextContentHtml: string) => {
+    if (!hasMeaningfulJournalContent(nextContentHtml) && !entry) return;
+    setSaveState('saving');
+    const timestamp = nowIso();
+    await onSaveJournalEntry({ id: entry?.id ?? createId(), projectId: project.id, date, contentHtml: nextContentHtml, createdAt: entry?.createdAt ?? timestamp, updatedAt: timestamp });
+    setSaveState('saved');
+  };
+
+  const scheduleSave = (nextContentHtml: string) => {
+    setContentHtml(nextContentHtml);
+    setSaveState(hasMeaningfulJournalContent(nextContentHtml) ? 'saving' : 'idle');
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => void save(nextContentHtml), 700);
+  };
+
+  return (
+    <article className="daily-journal-page paper-journal-page">
+      <header>
+        <h4>{formatJournalDate(date)}</h4>
+        <span>{saveState === 'saving' ? '\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58' : saveState === 'saved' ? '\u5df2\u81ea\u52a8\u4fdd\u5b58' : sessions.length > 0 ? sessions.length + ' \u6761\u65f6\u95f4\u8bb0\u5f55' : ''}</span>
+      </header>
+      <NotebookEditor value={contentHtml} onChange={scheduleSave} />
+      <DailySessionSummary sessions={sessions} />
+    </article>
+  );
+}
+
+function NotebookEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== value) editorRef.current.innerHTML = value;
+  }, [value]);
+
+  const syncContent = () => {
+    const editor = editorRef.current;
+    if (editor) onChange(editor.innerHTML);
+  };
+
+  const insertHtml = (html: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    document.execCommand('insertHTML', false, html);
+    syncContent();
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    const imageFile = Array.from(event.clipboardData.files).find((file) => file.type.startsWith('image/'));
+    if (!imageFile) {
+      window.setTimeout(syncContent, 0);
+      return;
+    }
+
+    event.preventDefault();
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') insertHtml('<p><img src="' + reader.result + '" alt="\u7c98\u8d34\u7684\u56fe\u7247" /></p>');
+    };
+    reader.readAsDataURL(imageFile);
+  };
+
+  return (
+    <div className="notebook-editor-wrap paper-editor-wrap">
+      <div
+        ref={editorRef}
+        className="notebook-editor paper-editor"
+        contentEditable
+        suppressContentEditableWarning
+        onInput={syncContent}
+        onPaste={handlePaste}
+        data-placeholder={'\u4eca\u5929\u8fd8\u6ca1\u6709\u5199\u5185\u5bb9\uff0c\u53ef\u4ee5\u76f4\u63a5\u4ece\u8fd9\u91cc\u5f00\u59cb\u3002\u590d\u5236\u56fe\u7247\u540e\u7c98\u8d34\u5230\u8fd9\u91cc\u4e5f\u53ef\u4ee5\u3002'}
+      />
+    </div>
+  );
+}
+
+function DailySessionSummary({ sessions }: { sessions: Session[] }) {
+  if (sessions.length === 0) return null;
+  return <div className="daily-session-summary"><h5>{'\u5f53\u5929\u65f6\u95f4\u8bb0\u5f55'}</h5>{sessions.map((session) => <div className="daily-session-card" key={session.id}><strong>{formatTimeOnly(session.startTime)} - {formatTimeOnly(session.endTime)} / {formatDuration(session.durationMinutes)}</strong>{session.content ? <span>{session.content}</span> : null}{session.feelings ? <em>{session.feelings}</em> : null}</div>)}</div>;
+}
+
+function formatJournalDate(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return year + '\u5e74' + month + '\u6708' + day + '\u65e5';
+}
+
+function formatTimeOnly(value: string) {
+  return new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function hasMeaningfulJournalContent(html: string) {
+  return /<img\b/i.test(html) || html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
 }
 
 function BasicPage({ title, description, mainCategory, projects, onCreateProject, onStartTimer, onManualSession }: {

@@ -1,9 +1,9 @@
-import type { ActiveTimer, Project, ProjectImage, Session, WeeklyPlan } from './types';
+import type { ActiveTimer, Project, ProjectImage, ProjectJournalEntry, Session, WeeklyPlan } from './types';
 
-type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'activeTimer';
+type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'activeTimer';
 
 const DB_NAME = 'personal-management-system';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -32,6 +32,11 @@ const openDatabase = () => {
       if (!db.objectStoreNames.contains('projectImages')) {
         const store = db.createObjectStore('projectImages', { keyPath: 'id' });
         store.createIndex('projectId', 'projectId');
+      }
+      if (!db.objectStoreNames.contains('projectJournalEntries')) {
+        const store = db.createObjectStore('projectJournalEntries', { keyPath: 'id' });
+        store.createIndex('projectId', 'projectId');
+        store.createIndex('date', 'date');
       }
       if (!db.objectStoreNames.contains('activeTimer')) {
         db.createObjectStore('activeTimer', { keyPath: 'id' });
@@ -80,6 +85,8 @@ export const storage = {
   saveWeeklyPlan: (plan: WeeklyPlan) => put('weeklyPlans', plan),
   getProjectImages: () => getAll<ProjectImage>('projectImages'),
   saveProjectImage: (image: ProjectImage) => put('projectImages', image),
+  getProjectJournalEntries: () => getAll<ProjectJournalEntry>('projectJournalEntries'),
+  saveProjectJournalEntry: (entry: ProjectJournalEntry) => put('projectJournalEntries', entry),
   getActiveTimer: async () => {
     const timers = await getAll<ActiveTimer>('activeTimer');
     return timers[0] ?? null;

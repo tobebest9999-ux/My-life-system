@@ -1321,3 +1321,362 @@ textarea {
     max-width: none;
   }
 }
+
+
+/* Notebook project page and tighter dashboard */
+.dashboard-grid-compact-calendar {
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr) minmax(260px, 0.7fr);
+  align-items: start;
+}
+
+.dashboard-grid-compact-calendar > .panel {
+  min-height: 0;
+}
+
+.dashboard-grid-compact-calendar .span-2 {
+  grid-column: span 2;
+}
+
+.dashboard-calendar-corner {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.notebook-project-page .notion-doc-title {
+  border-bottom-color: #e8e1d8;
+}
+
+.notebook-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  padding: 12px 0;
+  border-bottom: 1px solid #ede9e3;
+}
+
+.notebook-toolbar label {
+  min-width: 180px;
+  max-width: 240px;
+}
+
+.notebook-toolbar input {
+  min-height: 34px;
+  border-radius: 5px;
+}
+
+.project-notebook {
+  display: grid;
+  gap: 18px;
+  padding-top: 18px;
+}
+
+.notebook-heading h3 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.notebook-heading p {
+  margin: 0;
+  color: #78746f;
+  line-height: 1.6;
+}
+
+.daily-journal-page {
+  padding: 20px 0 24px;
+  border-top: 1px solid #ede9e3;
+}
+
+.daily-journal-page header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.daily-journal-page h4 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.daily-journal-page header span,
+.daily-session-empty {
+  color: #78746f;
+}
+
+.notebook-editor-wrap {
+  background: #fffdf9;
+  border: 1px solid #ebe4da;
+  border-radius: 8px;
+}
+
+.notebook-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  background: #fbf8f3;
+  border-bottom: 1px solid #ebe4da;
+  border-radius: 8px 8px 0 0;
+}
+
+.notebook-editor {
+  min-height: 280px;
+  padding: 28px 34px;
+  outline: none;
+  line-height: 1.85;
+  font-size: 16px;
+  background:
+    linear-gradient(#fffdf9 31px, #f1ece4 32px) 0 0 / 100% 32px;
+  border-radius: 0 0 8px 8px;
+  white-space: pre-wrap;
+}
+
+.notebook-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #aaa39a;
+}
+
+.notebook-editor p {
+  margin: 0 0 10px;
+}
+
+.notebook-editor img {
+  display: block;
+  max-width: min(100%, 720px);
+  margin: 14px 0;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(54 40 22 / 10%);
+}
+
+.daily-session-summary {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.daily-session-summary h5 {
+  margin: 0;
+  color: #504b45;
+  font-size: 15px;
+}
+
+.daily-session-card {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #fbfaf8;
+  border: 1px solid #ede9e3;
+  border-radius: 6px;
+}
+
+.daily-session-card span,
+.daily-session-card em {
+  color: #625d56;
+  font-style: normal;
+}
+
+.daily-session-empty {
+  margin: 12px 0 0;
+}
+
+.legacy-images {
+  padding-top: 18px;
+}
+
+.legacy-images summary {
+  cursor: pointer;
+  color: #78746f;
+  font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-grid-compact-calendar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-calendar-corner {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-grid-compact-calendar {
+    grid-template-columns: 1fr;
+  }
+
+  .notebook-toolbar,
+  .daily-journal-page header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .notebook-toolbar label {
+    max-width: none;
+  }
+
+  .notebook-editor {
+    min-height: 220px;
+    padding: 20px;
+  }
+}
+
+
+/* Latest white-paper notebook and compact dashboard adjustments */
+.dashboard-fill-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.42fr) minmax(320px, 0.86fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.dashboard-main-stack,
+.dashboard-side-stack {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.dashboard-fill-layout .panel {
+  min-height: 0;
+}
+
+.dashboard-side-stack .panel {
+  padding: 18px;
+}
+
+.dashboard-side-stack .active-timer {
+  min-height: 0;
+}
+
+.dashboard-side-stack .clock-wrap {
+  transform: scale(0.88);
+  transform-origin: top center;
+  margin-bottom: -10px;
+}
+
+.dashboard-side-stack .record-list,
+.dashboard-side-stack .suggestion-list {
+  max-height: none;
+}
+
+.paper-notebook {
+  display: block;
+  max-width: 980px;
+  margin: 18px auto 0;
+  padding: 0 0 48px;
+}
+
+.paper-journal-page {
+  padding: 38px 0 44px;
+  border-top: 1px solid #e8e2d8;
+}
+
+.paper-journal-page:first-child {
+  border-top: 0;
+  padding-top: 8px;
+}
+
+.paper-journal-page header {
+  max-width: 860px;
+  margin: 0 auto 14px;
+  padding: 0 4px;
+}
+
+.paper-journal-page h4 {
+  font-size: 25px;
+  letter-spacing: 0;
+}
+
+.paper-editor-wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  background: #ffffff;
+  border: 1px solid #efe9df;
+  border-radius: 2px;
+  box-shadow: 0 20px 50px rgb(55 45 30 / 8%);
+}
+
+.paper-editor {
+  min-height: 520px;
+  padding: 54px 62px;
+  background: #ffffff;
+  border-radius: 2px;
+  color: #1c2328;
+  font-size: 17px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.paper-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #9a948b;
+}
+
+.paper-editor p {
+  margin: 0 0 16px;
+}
+
+.paper-editor img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 18px 0;
+  border-radius: 3px;
+  box-shadow: 0 10px 28px rgb(42 35 24 / 10%);
+}
+
+.paper-journal-page .daily-session-summary {
+  max-width: 860px;
+  margin: 18px auto 0;
+  padding: 14px 16px;
+  background: #faf8f4;
+  border: 1px solid #ece5da;
+  border-radius: 6px;
+}
+
+.paper-journal-page .daily-session-card {
+  background: #ffffff;
+  border-color: #efe9df;
+}
+
+.notebook-editor-toolbar {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-fill-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-side-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-side-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .paper-notebook {
+    margin-top: 10px;
+  }
+
+  .paper-editor {
+    min-height: 420px;
+    padding: 32px 24px;
+    font-size: 16px;
+  }
+
+  .paper-journal-page header,
+  .paper-editor-wrap,
+  .paper-journal-page .daily-session-summary {
+    max-width: none;
+  }
+}

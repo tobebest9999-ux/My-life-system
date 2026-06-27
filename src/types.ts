@@ -72,6 +72,15 @@ export interface ProjectImage {
   createdAt: string;
 }
 
+export interface ProjectJournalEntry {
+  id: string;
+  projectId: string;
+  date: string;
+  contentHtml: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ActiveTimer {
   id: string;
   mainCategory: MainCategory;
