@@ -159,12 +159,24 @@ const navItems: { key: PageKey; label: string }[] = [
   { key: 'projects', label: T.projects },
 ];
 
+const commonUi = {
+  back: '\u8fd4\u56de',
+  delete: '\u5220\u9664',
+  action: '\u64cd\u4f5c',
+  cannotDeleteRunning: '\u8fd9\u4e2a\u9879\u76ee\u6b63\u5728\u8ba1\u65f6\u4e2d\uff0c\u8bf7\u5148\u7ed3\u675f\u8ba1\u65f6\u518d\u5220\u9664\u3002',
+  confirmDeleteProjectStart: '\u786e\u5b9a\u5220\u9664\u9879\u76ee\u300c',
+  confirmDeleteProjectEnd: '\u300d\u5417\uff1f\u5386\u53f2\u65f6\u95f4\u8bb0\u5f55\u4f1a\u4fdd\u7559\uff0c\u4f46\u9879\u76ee\u8d44\u6599\u3001\u56fe\u7247\u3001\u65e5\u8bb0\u548c\u5173\u8054\u8ba1\u5212\u4f1a\u5220\u9664\u3002',
+  confirmDeleteMetricStart: '\u786e\u5b9a\u5220\u9664\u6210\u957f\u9879\u300c',
+  confirmDeleteMetricEnd: '\u300d\u5417\uff1f\u8fd9\u4e2a\u6210\u957f\u9879\u4e0b\u9762\u7684\u8bb0\u5f55\u4e5f\u4f1a\u4e00\u8d77\u5220\u9664\u3002',
+};
+
 function sortByCreated<TItem extends { createdAt: string }>(items: TItem[]) {
   return [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 function App() {
   const [page, setPage] = useState<PageKey>('dashboard');
+  const [pageHistory, setPageHistory] = useState<PageKey[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [weeklyPlans, setWeeklyPlans] = useState<WeeklyPlan[]>([]);
@@ -207,6 +219,23 @@ function App() {
     void reload();
   }, []);
 
+  const navigatePage = (nextPage: PageKey) => {
+    setPage((current) => {
+      if (current === nextPage) return current;
+      setPageHistory((history) => [...history, current]);
+      return nextPage;
+    });
+  };
+
+  const goBack = () => {
+    setPageHistory((history) => {
+      const previous = history[history.length - 1];
+      if (!previous) return history;
+      setPage(previous);
+      return history.slice(0, -1);
+    });
+  };
+
   const createProject = async (input: {
     name: string;
     mainCategory: MainCategory;
@@ -248,6 +277,31 @@ function App() {
     await reload();
   };
 
+  const deleteProject = async (project: Project) => {
+    if (activeTimer?.projectId === project.id) {
+      window.alert(commonUi.cannotDeleteRunning);
+      return;
+    }
+    const confirmed = window.confirm(commonUi.confirmDeleteProjectStart + project.name + commonUi.confirmDeleteProjectEnd);
+    if (!confirmed) return;
+    await Promise.all([
+      ...images.filter((image) => image.projectId === project.id).map((image) => storage.deleteProjectImage(image.id)),
+      ...journalEntries.filter((entry) => entry.projectId === project.id).map((entry) => storage.deleteProjectJournalEntry(entry.id)),
+      ...weeklyPlans.filter((plan) => plan.projectId === project.id).map((plan) => storage.deleteWeeklyPlan(plan.id)),
+      ...exercisePlans.filter((plan) => plan.projectId === project.id).map((plan) => storage.deleteExercisePlan(plan.id)),
+    ]);
+    await storage.deleteProject(project.id);
+    await reload();
+  };
+
+  const deleteGrowthMetric = async (metric: GrowthMetric) => {
+    const confirmed = window.confirm(commonUi.confirmDeleteMetricStart + metric.name + commonUi.confirmDeleteMetricEnd);
+    if (!confirmed) return;
+    await Promise.all(growthRecords.filter((record) => record.metricId === metric.id).map((record) => storage.deleteGrowthRecord(record.id)));
+    await storage.deleteGrowthMetric(metric.id);
+    await reload();
+  };
+
   const startTimer = async (project: Project) => {
     if (activeTimer) {
       window.alert(T.oneTimerOnly);
@@ -262,7 +316,7 @@ function App() {
       startTime: nowIso(),
     });
     setDialog(null);
-    setPage('dashboard');
+    navigatePage('dashboard');
     await reload();
   };
 
@@ -356,7 +410,7 @@ function App() {
         </div>
         <nav className="nav-list" aria-label={T.appName}>
           {navItems.map((item) => (
-            <button key={item.key} className={page === item.key ? 'nav-button active' : 'nav-button'} onClick={() => setPage(item.key)}>
+            <button key={item.key} className={page === item.key ? 'nav-button active' : 'nav-button'} onClick={() => navigatePage(item.key)}>
               {item.label}
             </button>
           ))}
@@ -368,7 +422,7 @@ function App() {
             <p className="eyebrow">{T.stage}</p>
             <h1>{pageLabels[page]}</h1>
           </div>
-          <button className="secondary-button" onClick={() => openManual()}>{T.manualSession}</button>
+          <div className="page-actions">{pageHistory.length > 0 ? <button className="ghost-button" onClick={goBack}>{commonUi.back}</button> : null}<button className="secondary-button" onClick={() => openManual()}>{T.manualSession}</button></div>
         </header>
         {loading ? <section className="panel">{T.loading}</section> : null}
         {!loading && page === 'dashboard' ? (
@@ -392,6 +446,7 @@ function App() {
             activeTimer={activeTimer}
             onCreateProject={createProject}
             onUpdateProject={updateProject}
+            onDeleteProject={deleteProject}
             onStartTimer={startTimer}
             onManualSession={openManual}
             journalEntries={journalEntries}
@@ -409,18 +464,20 @@ function App() {
             growthRecords={growthRecords}
             activeTimer={activeTimer}
             onCreateProject={createProject}
+            onDeleteProject={deleteProject}
             onStartTimer={startTimer}
             onManualSession={openManual}
             onSaveExercisePlan={saveExercisePlan}
             onSaveGrowthMetric={saveGrowthMetric}
+            onDeleteGrowthMetric={deleteGrowthMetric}
             onSaveGrowthRecord={saveGrowthRecord}
           />
         ) : null}
         {!loading && page === 'study' ? (
-          <BasicPage title={T.study} description={T.studyPlaceholder} mainCategory="study" projects={projects} onCreateProject={createProject} onStartTimer={startTimer} onManualSession={openManual} />
+          <BasicPage title={T.study} description={T.studyPlaceholder} mainCategory="study" projects={projects} onCreateProject={createProject} onDeleteProject={deleteProject} onStartTimer={startTimer} onManualSession={openManual} />
         ) : null}
         {!loading && page === 'projects' ? (
-          <BasicPage title={T.projects} description={T.projectPlaceholderPage} mainCategory="project" projects={projects} onCreateProject={createProject} onStartTimer={startTimer} onManualSession={openManual} />
+          <BasicPage title={T.projects} description={T.projectPlaceholderPage} mainCategory="project" projects={projects} onCreateProject={createProject} onDeleteProject={deleteProject} onStartTimer={startTimer} onManualSession={openManual} />
         ) : null}
       </main>
 
@@ -646,7 +703,7 @@ function PlanRow({ plan, projects, onSavePlan }: { plan: WeeklyPlan; projects: P
   return <div className="plan-row"><div><div className="plan-title">{plan.title}</div><div className="meta-line">{plan.mainCategory ? mainCategoryLabels[plan.mainCategory] : T.noRelatedCategory}{project ? ' / ' + project.name : ''}{plan.deadline ? ' / ' + T.deadline + ' ' + formatDate(plan.deadline) : ''}</div></div><div className="plan-controls"><span className={'status-pill ' + plan.status}>{planStatusLabels[plan.status]}</span><input aria-label={T.currentProgress} type="number" min="0" value={progress} onChange={(event) => setProgress(event.target.value)} /><button className="secondary-button compact" onClick={() => onSavePlan({ ...plan, currentProgress: Number(progress || 0) })}>{T.updateProgress}</button><button className="secondary-button compact" onClick={() => onSavePlan({ ...plan, status: 'completed' })}>{T.markCompleted}</button><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'skipped' })}>{T.skip}</button></div></div>;
 }
 
-function EntertainmentPage({ projects, sessions, images, journalEntries, plans, activeTimer, onCreateProject, onUpdateProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSavePlan }: {
+function EntertainmentPage({ projects, sessions, images, journalEntries, plans, activeTimer, onCreateProject, onUpdateProject, onDeleteProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSavePlan }: {
   projects: Project[];
   sessions: Session[];
   images: ProjectImage[];
@@ -655,6 +712,7 @@ function EntertainmentPage({ projects, sessions, images, journalEntries, plans, 
   activeTimer: ActiveTimer | null;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
   onUpdateProject: (project: Project) => Promise<void>;
+  onDeleteProject: (project: Project) => Promise<void>;
   onStartTimer: (project: Project) => Promise<void>;
   onManualSession: (preset: ManualPreset) => void;
   onAddImage: (project: Project, data: string, caption?: string) => Promise<void>;
@@ -668,11 +726,12 @@ function EntertainmentPage({ projects, sessions, images, journalEntries, plans, 
   const selectedProject = entertainmentProjects.find((project) => project.id === selectedId);
   const enterCategory = (nextCategory: string) => { setCategory(nextCategory); setSelectedId(''); setView('category'); };
   const enterProject = (id: string) => { setSelectedId(id); setView('project'); };
+  const deleteAndLeaveProject = async (project: Project) => { await onDeleteProject(project); setSelectedId(''); setView('category'); };
   if (view === 'project' && selectedProject) {
-    return <ProjectDetail project={selectedProject} sessions={sessions.filter((session) => session.projectId === selectedProject.id)} images={images.filter((image) => image.projectId === selectedProject.id)} journalEntries={journalEntries.filter((entry) => entry.projectId === selectedProject.id)} plans={plans.filter((plan) => plan.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onUpdateProject={onUpdateProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onAddImage={onAddImage} onSaveJournalEntry={onSaveJournalEntry} onSavePlan={onSavePlan} />;
+    return <ProjectDetail project={selectedProject} sessions={sessions.filter((session) => session.projectId === selectedProject.id)} images={images.filter((image) => image.projectId === selectedProject.id)} journalEntries={journalEntries.filter((entry) => entry.projectId === selectedProject.id)} plans={plans.filter((plan) => plan.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onUpdateProject={onUpdateProject} onDeleteProject={deleteAndLeaveProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onAddImage={onAddImage} onSaveJournalEntry={onSaveJournalEntry} onSavePlan={onSavePlan} />;
   }
   if (view === 'category') {
-    return <EntertainmentCategoryBoard category={category} projects={entertainmentProjects.filter((project) => project.subCategory === category)} sessions={sessions} plans={plans} onBack={() => setView('home')} onCreateProject={onCreateProject} onOpenProject={enterProject} />;
+    return <EntertainmentCategoryBoard category={category} projects={entertainmentProjects.filter((project) => project.subCategory === category)} sessions={sessions} plans={plans} onBack={() => setView('home')} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onOpenProject={enterProject} />;
   }
   return <EntertainmentHome sessions={sessions} projects={entertainmentProjects} onOpenCategory={enterCategory} />;
 }
@@ -685,16 +744,17 @@ function EntertainmentHome({ sessions, projects, onOpenCategory }: { sessions: S
   return <div className="notion-page entertainment-notion"><section className="notion-hero"><div className="notion-breadcrumb">个人管理系统 / 娱乐</div><h2>娱乐</h2><p>把游戏、动画、漫画和其他娱乐当成一个轻量资料库：先收集项目，再记录时间、感受和提醒。</p><div className="notion-hero-stats"><span>{projects.length} 个项目</span><span>{formatDuration(total)} 总时长</span><span>{entertainmentSessions.length} 条记录</span></div></section><section className="notion-section"><div className="notion-section-title"><h3>娱乐资料库</h3><span>点击分类进入对应 database</span></div><div className="notion-category-grid">{Object.entries(subCategoryLabels.entertainment).map(([key, label]) => { const minutes = totals[key] ?? 0; const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; const categoryProjects = projects.filter((project) => project.subCategory === key); const recent = categoryProjects[0]; return <button key={key} className="notion-category-card" onClick={() => onOpenCategory(key)}><div><strong>{label}</strong><span>{categoryProjects.length} 个项目</span></div><p>{recent ? '最近：' + recent.name : '暂无项目'}</p><div className="notion-progress"><div style={{ width: percent + '%' }} /></div><footer><span>{formatDuration(minutes)}</span><em>{percent}%</em></footer></button>; })}</div></section><section className="notion-section"><div className="notion-section-title"><h3>时间分布</h3><span>database summary</span></div><div className="notion-progress-list">{Object.entries(subCategoryLabels.entertainment).map(([key, label]) => { const minutes = totals[key] ?? 0; const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; return <div className="notion-progress-row" key={key}><span>{label}</span><div className="notion-progress"><div style={{ width: percent + '%' }} /></div><strong>{formatDuration(minutes)}</strong></div>; })}</div></section><section className="notion-section"><div className="notion-section-title"><h3>高频项目</h3><span>按累计时长排序</span></div><CompactRows rows={topProjects.map((item) => [item.project.name, formatDuration(item.minutes)])} empty={T.noRecords} /></section></div>;
 }
 
-function EntertainmentCategoryBoard({ category, projects, sessions, plans, onBack, onCreateProject, onOpenProject }: {
+function EntertainmentCategoryBoard({ category, projects, sessions, plans, onBack, onCreateProject, onDeleteProject, onOpenProject }: {
   category: string;
   projects: Project[];
   sessions: Session[];
   plans: WeeklyPlan[];
   onBack: () => void;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onDeleteProject: (project: Project) => Promise<void>;
   onOpenProject: (projectId: string) => void;
 }) {
-  return <div className="notion-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>← 娱乐</button><div className="notion-breadcrumb">娱乐 / {getSubCategoryLabel('entertainment', category)}</div><h2>{getSubCategoryLabel('entertainment', category)}</h2><p>像 Notion database 一样管理这个分类下的项目。点击任意一行进入项目笔记页。</p></section><EntertainmentProjectForm subCategory={category} onCreateProject={onCreateProject} /><section className="notion-section"><div className="notion-section-title"><h3>项目表格</h3><span>{projects.length} 个项目</span></div>{projects.length === 0 ? <p className="empty-text">{T.noProject}</p> : <div className="project-table-wrap notion-table-wrap"><table className="project-table notion-table"><thead><tr><th>项目</th><th>状态</th><th>总时长</th><th>最近记录</th><th>计划/提醒</th><th>最近感受</th></tr></thead><tbody>{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = getProjectTotalMinutes(project.id, sessions); const latest = projectSessions[0]; const projectPlans = plans.filter((plan) => plan.projectId === project.id); const nextPlan = projectPlans.filter((plan) => getEffectivePlanStatus(plan) === 'active' && plan.deadline).sort((a, b) => new Date(a.deadline || '').getTime() - new Date(b.deadline || '').getTime())[0]; const planSummary = nextPlan ? formatDateTime(nextPlan.deadline || nextPlan.createdAt) + ' / ' + nextPlan.title : projectPlans.length > 0 ? projectPlans.length + ' 个计划记录' : '暂无提醒'; return <tr key={project.id} onClick={() => onOpenProject(project.id)}><td><strong>{project.name}</strong><small>{getSubCategoryLabel(project.mainCategory, project.subCategory)}</small></td><td><span className="notion-tag">{projectStatusLabels[project.status]}</span></td><td>{formatDuration(total)}</td><td>{latest ? formatDateTime(latest.startTime) + ' / ' + formatDuration(latest.durationMinutes) : '暂无记录'}</td><td>{planSummary}</td><td>{latest?.feelings || '暂无感受'}</td></tr>; })}</tbody></table></div>}</section></div>;
+  return <div className="notion-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{T.entertainment} / {getSubCategoryLabel('entertainment', category)}</div><h2>{getSubCategoryLabel('entertainment', category)}</h2><p>{'\u50cf Notion database \u4e00\u6837\u7ba1\u7406\u8fd9\u4e2a\u5206\u7c7b\u4e0b\u7684\u9879\u76ee\u3002\u70b9\u51fb\u4efb\u610f\u4e00\u884c\u8fdb\u5165\u9879\u76ee\u7b14\u8bb0\u9875\u3002'}</p></section><EntertainmentProjectForm subCategory={category} onCreateProject={onCreateProject} /><section className="notion-section"><div className="notion-section-title"><h3>{'\u9879\u76ee\u8868\u683c'}</h3><span>{projects.length} {'\u4e2a\u9879\u76ee'}</span></div>{projects.length === 0 ? <p className="empty-text">{T.noProject}</p> : <div className="project-table-wrap notion-table-wrap"><table className="project-table notion-table"><thead><tr><th>{T.project}</th><th>{'\u72b6\u6001'}</th><th>{'\u603b\u65f6\u957f'}</th><th>{'\u6700\u8fd1\u8bb0\u5f55'}</th><th>{'\u8ba1\u5212/\u63d0\u9192'}</th><th>{'\u6700\u8fd1\u611f\u53d7'}</th><th>{commonUi.action}</th></tr></thead><tbody>{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = getProjectTotalMinutes(project.id, sessions); const latest = projectSessions[0]; const projectPlans = plans.filter((plan) => plan.projectId === project.id); const nextPlan = projectPlans.filter((plan) => getEffectivePlanStatus(plan) === 'active' && plan.deadline).sort((a, b) => new Date(a.deadline || '').getTime() - new Date(b.deadline || '').getTime())[0]; const planSummary = nextPlan ? formatDateTime(nextPlan.deadline || nextPlan.createdAt) + ' / ' + nextPlan.title : projectPlans.length > 0 ? projectPlans.length + ' ' + '\u4e2a\u8ba1\u5212\u8bb0\u5f55' : '\u6682\u65e0\u63d0\u9192'; return <tr key={project.id} onClick={() => onOpenProject(project.id)}><td><strong>{project.name}</strong><small>{getSubCategoryLabel(project.mainCategory, project.subCategory)}</small></td><td><span className="notion-tag">{projectStatusLabels[project.status]}</span></td><td>{formatDuration(total)}</td><td>{latest ? formatDateTime(latest.startTime) + ' / ' + formatDuration(latest.durationMinutes) : '\u6682\u65e0\u8bb0\u5f55'}</td><td>{planSummary}</td><td>{latest?.feelings || '\u6682\u65e0\u611f\u53d7'}</td><td><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteProject(project); }}>{commonUi.delete}</button></td></tr>; })}</tbody></table></div>}</section></div>;
 }
 
 function EntertainmentProjectForm({ subCategory, onCreateProject }: { subCategory: string; onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project> }) {
@@ -710,7 +770,7 @@ function EntertainmentProjectForm({ subCategory, onCreateProject }: { subCategor
   return <section className="notion-inline-create"><div className="notion-section-title"><h3>新建项目</h3><span>inline database toolbar</span></div><div className="notion-create-row"><label><span>{T.projectName}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={T.projectPlaceholder} /></label><label><span>{T.projectStatus}</span><select value={status} onChange={(event) => setStatus(event.target.value as ProjectStatus)}>{projectStatusOptions.map((option) => <option key={option} value={option}>{projectStatusLabels[option]}</option>)}</select></label><label><span>{T.imageUrl}</span><input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} /></label><button className="primary-button" onClick={submit}>{T.createProject}</button></div>{error ? <p className="error-text">{error}</p> : null}</section>;
 }
 
-function ProjectDetail({ project, sessions, images, journalEntries, plans, activeTimer, onBack, onUpdateProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSavePlan }: {
+function ProjectDetail({ project, sessions, images, journalEntries, plans, activeTimer, onBack, onUpdateProject, onDeleteProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSavePlan }: {
   project?: Project;
   sessions: Session[];
   images: ProjectImage[];
@@ -719,6 +779,7 @@ function ProjectDetail({ project, sessions, images, journalEntries, plans, activ
   activeTimer: ActiveTimer | null;
   onBack: () => void;
   onUpdateProject: (project: Project) => Promise<void>;
+  onDeleteProject: (project: Project) => Promise<void>;
   onStartTimer: (project: Project) => Promise<void>;
   onManualSession: (preset: ManualPreset) => void;
   onAddImage: (project: Project, data: string, caption?: string) => Promise<void>;
@@ -731,8 +792,8 @@ function ProjectDetail({ project, sessions, images, journalEntries, plans, activ
   const total = sessions.reduce((sum, session) => sum + session.durationMinutes, 0);
   const latest = sessions[0];
   const nextPlan = plans.filter((plan) => getEffectivePlanStatus(plan) === 'active' && plan.deadline).sort((a, b) => new Date(a.deadline || '').getTime() - new Date(b.deadline || '').getTime())[0];
-  const addReminder = async () => { if (!reminderTime) return; const timestamp = nowIso(); await onSavePlan({ id: createId(), title: reminderTitle.trim() || '进行 ' + project.name, mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id, deadline: fromInputDateTime(reminderTime), targetType: 'completion', currentProgress: 0, status: 'active', createdAt: timestamp, updatedAt: timestamp }); setReminderTime(''); setReminderTitle(''); };
-  return <div className="notion-page notion-project-page notebook-project-page"><section className="notion-doc-title"><button className="notion-back" onClick={onBack}>← 返回列表</button><div className="notion-breadcrumb">娱乐 / {getSubCategoryLabel(project.mainCategory, project.subCategory)} / {project.name}</div><h2>{project.name}</h2><div className="notion-properties"><div><span>状态</span><select value={project.status} onChange={(event) => onUpdateProject({ ...project, status: event.target.value as ProjectStatus })}>{projectStatusOptions.map((option) => <option key={option} value={option}>{projectStatusLabels[option]}</option>)}</select></div><div><span>分类</span><strong>{getSubCategoryLabel(project.mainCategory, project.subCategory)}</strong></div><div><span>总时长</span><strong>{formatDuration(total)}</strong></div><div><span>最近记录</span><strong>{latest ? formatDateTime(latest.startTime) : '暂无记录'}</strong></div><div><span>下次提醒</span><strong>{nextPlan ? formatDateTime(nextPlan.deadline || nextPlan.createdAt) : '暂无提醒'}</strong></div></div></section><section className="notebook-toolbar"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button><label><span>提醒时间</span><input type="datetime-local" value={reminderTime} onChange={(event) => setReminderTime(event.target.value)} /></label><label><span>提醒内容</span><input value={reminderTitle} onChange={(event) => setReminderTitle(event.target.value)} placeholder={'进行 ' + project.name} /></label><button className="secondary-button compact" onClick={addReminder}>保存提醒</button></section><ProjectNotebook project={project} sessions={sessions} journalEntries={journalEntries} onSaveJournalEntry={onSaveJournalEntry} /><section className="notion-block legacy-images"><details><summary>历史图片</summary>{images.length > 0 ? <div className="image-grid">{images.map((image) => <figure key={image.id}><img src={image.data} alt={image.caption || T.projectImages} />{image.caption ? <figcaption>{image.caption}</figcaption> : null}</figure>)}</div> : <p className="empty-text">暂无历史图片</p>}</details></section></div>;
+  const addReminder = async () => { if (!reminderTime) return; const timestamp = nowIso(); await onSavePlan({ id: createId(), title: reminderTitle.trim() || '\u8fdb\u884c ' + project.name, mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id, deadline: fromInputDateTime(reminderTime), targetType: 'completion', currentProgress: 0, status: 'active', createdAt: timestamp, updatedAt: timestamp }); setReminderTime(''); setReminderTitle(''); };
+  return <div className="notion-page notion-project-page notebook-project-page"><section className="notion-doc-title"><div className="notion-title-actions"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><button className="danger-button compact" onClick={() => void onDeleteProject(project)}>{commonUi.delete}</button></div><div className="notion-breadcrumb">{T.entertainment} / {getSubCategoryLabel(project.mainCategory, project.subCategory)} / {project.name}</div><h2>{project.name}</h2><div className="notion-properties"><div><span>{'\u72b6\u6001'}</span><select value={project.status} onChange={(event) => onUpdateProject({ ...project, status: event.target.value as ProjectStatus })}>{projectStatusOptions.map((option) => <option key={option} value={option}>{projectStatusLabels[option]}</option>)}</select></div><div><span>{'\u5206\u7c7b'}</span><strong>{getSubCategoryLabel(project.mainCategory, project.subCategory)}</strong></div><div><span>{'\u603b\u65f6\u957f'}</span><strong>{formatDuration(total)}</strong></div><div><span>{'\u6700\u8fd1\u8bb0\u5f55'}</span><strong>{latest ? formatDateTime(latest.startTime) : '\u6682\u65e0\u8bb0\u5f55'}</strong></div><div><span>{'\u4e0b\u6b21\u63d0\u9192'}</span><strong>{nextPlan ? formatDateTime(nextPlan.deadline || nextPlan.createdAt) : '\u6682\u65e0\u63d0\u9192'}</strong></div></div></section><section className="notebook-toolbar"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button><label><span>{'\u63d0\u9192\u65f6\u95f4'}</span><input type="datetime-local" value={reminderTime} onChange={(event) => setReminderTime(event.target.value)} /></label><label><span>{'\u63d0\u9192\u5185\u5bb9'}</span><input value={reminderTitle} onChange={(event) => setReminderTitle(event.target.value)} placeholder={'\u8fdb\u884c ' + project.name} /></label><button className="secondary-button compact" onClick={addReminder}>{'\u4fdd\u5b58\u63d0\u9192'}</button></section><ProjectNotebook project={project} sessions={sessions} journalEntries={journalEntries} onSaveJournalEntry={onSaveJournalEntry} /><section className="notion-block legacy-images"><details><summary>{'\u5386\u53f2\u56fe\u7247'}</summary>{images.length > 0 ? <div className="image-grid">{images.map((image) => <figure key={image.id}><img src={image.data} alt={image.caption || T.projectImages} />{image.caption ? <figcaption>{image.caption}</figcaption> : null}</figure>)}</div> : <p className="empty-text">{'\u6682\u65e0\u5386\u53f2\u56fe\u7247'}</p>}</details></section></div>;
 }
 
 function ProjectNotebook({ project, sessions, journalEntries, onSaveJournalEntry }: {
@@ -1004,7 +1065,7 @@ const exerciseUi = {
   subCategory: '\u7c7b\u578b',
 };
 
-function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growthRecords, activeTimer, onCreateProject, onStartTimer, onManualSession, onSaveExercisePlan, onSaveGrowthMetric, onSaveGrowthRecord }: {
+function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growthRecords, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveExercisePlan, onSaveGrowthMetric, onDeleteGrowthMetric, onSaveGrowthRecord }: {
   projects: Project[];
   sessions: Session[];
   exercisePlans: ExercisePlan[];
@@ -1012,10 +1073,12 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
   growthRecords: GrowthRecord[];
   activeTimer: ActiveTimer | null;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onDeleteProject: (project: Project) => Promise<void>;
   onStartTimer: (project: Project) => Promise<void>;
   onManualSession: (preset: ManualPreset) => void;
   onSaveExercisePlan: (plan: ExercisePlan) => Promise<void>;
   onSaveGrowthMetric: (metric: GrowthMetric) => Promise<void>;
+  onDeleteGrowthMetric: (metric: GrowthMetric) => Promise<void>;
   onSaveGrowthRecord: (record: GrowthRecord) => Promise<void>;
 }) {
   const exerciseProjects = projects.filter((project) => project.mainCategory === 'exercise');
@@ -1025,6 +1088,7 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
 
   useEffect(() => {
     if (!selectedProjectId && exerciseProjects[0]) setSelectedProjectId(exerciseProjects[0].id);
+    if (selectedProjectId && !exerciseProjects.some((project) => project.id === selectedProjectId)) setSelectedProjectId(exerciseProjects[0]?.id ?? '');
   }, [selectedProjectId, exerciseProjects]);
 
   return (
@@ -1054,7 +1118,7 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
 
       <section className="panel exercise-projects-panel">
         <h2>{exerciseUi.projects}</h2>
-        <ExerciseProjectLibrary projects={exerciseProjects} sessions={exerciseSessions} selectedProjectId={selectedProjectId} onSelectProject={setSelectedProjectId} onCreateProject={onCreateProject} onStartTimer={onStartTimer} onManualSession={onManualSession} activeTimer={activeTimer} />
+        <ExerciseProjectLibrary projects={exerciseProjects} sessions={exerciseSessions} selectedProjectId={selectedProjectId} onSelectProject={setSelectedProjectId} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} activeTimer={activeTimer} />
       </section>
 
       <section className="panel exercise-detail-panel">
@@ -1074,7 +1138,7 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
 
       <section className="panel exercise-growth-panel-wrap">
         <h2>{exerciseUi.growth}</h2>
-        <GrowthPanel metrics={growthMetrics} records={growthRecords} onSaveMetric={onSaveGrowthMetric} onSaveRecord={onSaveGrowthRecord} />
+        <GrowthPanel metrics={growthMetrics} records={growthRecords} onSaveMetric={onSaveGrowthMetric} onDeleteMetric={onDeleteGrowthMetric} onSaveRecord={onSaveGrowthRecord} />
       </section>
     </div>
   );
@@ -1095,20 +1159,21 @@ function ExerciseQuickStart({ projects, activeTimer, onStartTimer, onCreateProje
   return <div className="exercise-quick-start"><SelectExerciseSubCategory value={subCategory} onChange={(value) => { setSubCategory(value); setProjectId(''); }} /><label><span>{exerciseUi.selectProject}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{exerciseUi.noProjectOption}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label><span>{exerciseUi.newProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={exerciseUi.newProjectPlaceholder} /></label><button className="primary-button" disabled={Boolean(activeTimer)} onClick={start}>{exerciseUi.start}</button></div>;
 }
 
-function ExerciseProjectLibrary({ projects, sessions, selectedProjectId, activeTimer, onSelectProject, onCreateProject, onStartTimer, onManualSession }: {
+function ExerciseProjectLibrary({ projects, sessions, selectedProjectId, activeTimer, onSelectProject, onCreateProject, onDeleteProject, onStartTimer, onManualSession }: {
   projects: Project[];
   sessions: Session[];
   selectedProjectId: string;
   activeTimer: ActiveTimer | null;
   onSelectProject: (id: string) => void;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onDeleteProject: (project: Project) => Promise<void>;
   onStartTimer: (project: Project) => Promise<void>;
   onManualSession: (preset: ManualPreset) => void;
 }) {
-  return <div className="exercise-project-library">{exerciseSubCategoryOptions.map((category) => <ExerciseProjectSection key={category} category={category} projects={projects.filter((project) => project.subCategory === category)} sessions={sessions} selectedProjectId={selectedProjectId} activeTimer={activeTimer} onSelectProject={onSelectProject} onCreateProject={onCreateProject} onStartTimer={onStartTimer} onManualSession={onManualSession} />)}</div>;
+  return <div className="exercise-project-library">{exerciseSubCategoryOptions.map((category) => <ExerciseProjectSection key={category} category={category} projects={projects.filter((project) => project.subCategory === category)} sessions={sessions} selectedProjectId={selectedProjectId} activeTimer={activeTimer} onSelectProject={onSelectProject} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} />)}</div>;
 }
 
-function ExerciseProjectSection({ category, projects, sessions, selectedProjectId, activeTimer, onSelectProject, onCreateProject, onStartTimer, onManualSession }: {
+function ExerciseProjectSection({ category, projects, sessions, selectedProjectId, activeTimer, onSelectProject, onCreateProject, onDeleteProject, onStartTimer, onManualSession }: {
   category: ExerciseSubCategory;
   projects: Project[];
   sessions: Session[];
@@ -1116,6 +1181,7 @@ function ExerciseProjectSection({ category, projects, sessions, selectedProjectI
   activeTimer: ActiveTimer | null;
   onSelectProject: (id: string) => void;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onDeleteProject: (project: Project) => Promise<void>;
   onStartTimer: (project: Project) => Promise<void>;
   onManualSession: (preset: ManualPreset) => void;
 }) {
@@ -1126,7 +1192,7 @@ function ExerciseProjectSection({ category, projects, sessions, selectedProjectI
     setName('');
     onSelectProject(project.id);
   };
-  return <div className="exercise-project-section"><div className="section-heading"><h3>{exerciseSubCategoryLabels[category]}</h3></div><div className="inline-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.newProjectPlaceholder} /><button className="secondary-button compact" onClick={create}>{exerciseUi.create}</button></div>{projects.length === 0 ? <p className="empty-text">{exerciseUi.noProject}</p> : <div className="exercise-project-list">{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = projectSessions.reduce((sum, session) => sum + session.durationMinutes, 0); return <article key={project.id} className={project.id === selectedProjectId ? 'exercise-project-card active' : 'exercise-project-card'} onClick={() => onSelectProject(project.id)}><strong>{project.name}</strong><span>{projectSessions.length} {exerciseUi.times} / {formatDuration(total)}</span><div className="exercise-card-actions"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={(event) => { event.stopPropagation(); void onStartTimer(project); }}>{T.startTimer}</button><button className="secondary-button compact" onClick={(event) => { event.stopPropagation(); onManualSession({ mainCategory: 'exercise', subCategory: category, projectId: project.id }); }}>{T.manualSession}</button></div></article>; })}</div>}</div>;
+  return <div className="exercise-project-section"><div className="section-heading"><h3>{exerciseSubCategoryLabels[category]}</h3></div><div className="inline-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.newProjectPlaceholder} /><button className="secondary-button compact" onClick={create}>{exerciseUi.create}</button></div>{projects.length === 0 ? <p className="empty-text">{exerciseUi.noProject}</p> : <div className="exercise-project-list">{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = projectSessions.reduce((sum, session) => sum + session.durationMinutes, 0); return <article key={project.id} className={project.id === selectedProjectId ? 'exercise-project-card active' : 'exercise-project-card'} onClick={() => onSelectProject(project.id)}><strong>{project.name}</strong><span>{projectSessions.length} {exerciseUi.times} / {formatDuration(total)}</span><div className="exercise-card-actions"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={(event) => { event.stopPropagation(); void onStartTimer(project); }}>{T.startTimer}</button><button className="secondary-button compact" onClick={(event) => { event.stopPropagation(); onManualSession({ mainCategory: 'exercise', subCategory: category, projectId: project.id }); }}>{T.manualSession}</button><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteProject(project); }}>{commonUi.delete}</button></div></article>; })}</div>}</div>;
 }
 
 function ExerciseProjectDetail({ project, sessions }: { project?: Project; sessions: Session[] }) {
@@ -1189,14 +1255,14 @@ function ExercisePlanPanel({ projects, plans, onSavePlan }: { projects: Project[
   return <div className="exercise-plan-panel"><div className="notification-row">{notificationEnabled ? <span className="status-pill active">{exerciseUi.notificationOn}</span> : <button className="secondary-button compact" onClick={requestNotification}>{exerciseUi.enableNotification}</button>}{duePlans.length > 0 ? <span className="warning-text">{exerciseUi.overduePrefix} {duePlans.length} {exerciseUi.overdueSuffix}</span> : null}</div><div className="exercise-plan-form"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={exerciseUi.planPlaceholder} /><SelectExerciseSubCategory value={subCategory} onChange={(value) => { setSubCategory(value); setProjectId(''); }} /><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{exerciseUi.relatedProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select><input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={exerciseUi.note} /><button className="primary-button" onClick={create}>{exerciseUi.addPlan}</button></div><div className="calendar-toolbar"><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>{exerciseUi.previousMonth}</button><strong>{monthCursor.getFullYear()}{'\u5e74'}{monthCursor.getMonth() + 1}{'\u6708'}</strong><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>{exerciseUi.nextMonth}</button></div><div className="exercise-plan-month">{buildMonthCells(monthCursor).map((date, index) => date ? <div key={toDateKey(date)} className="exercise-plan-day"><strong>{date.getDate()}</strong>{monthPlans.filter((plan) => toDateKey(new Date(plan.scheduledAt)) === toDateKey(date)).map((plan) => <div key={plan.id} className={'exercise-plan-item ' + plan.status}><span>{formatDateTime(plan.scheduledAt)} {plan.title}</span><small>{exerciseSubCategoryLabels[plan.subCategory]}</small>{plan.note ? <small>{plan.note}</small> : null}<div><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'done' })}>{exerciseUi.done}</button><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'skipped' })}>{exerciseUi.skipped}</button></div></div>)}</div> : <div key={'empty-' + index} className="exercise-plan-day empty" />)}</div></div>;
 }
 
-function GrowthPanel({ metrics, records, onSaveMetric, onSaveRecord }: { metrics: GrowthMetric[]; records: GrowthRecord[]; onSaveMetric: (metric: GrowthMetric) => Promise<void>; onSaveRecord: (record: GrowthRecord) => Promise<void> }) {
+function GrowthPanel({ metrics, records, onSaveMetric, onDeleteMetric, onSaveRecord }: { metrics: GrowthMetric[]; records: GrowthRecord[]; onSaveMetric: (metric: GrowthMetric) => Promise<void>; onDeleteMetric: (metric: GrowthMetric) => Promise<void>; onSaveRecord: (record: GrowthRecord) => Promise<void> }) {
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('kg');
   const [selectedMetricId, setSelectedMetricId] = useState(metrics[0]?.id ?? '');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
-  useEffect(() => { if (!selectedMetricId && metrics[0]) setSelectedMetricId(metrics[0].id); }, [metrics, selectedMetricId]);
+  useEffect(() => { if (!selectedMetricId && metrics[0]) setSelectedMetricId(metrics[0].id); if (selectedMetricId && !metrics.some((metric) => metric.id === selectedMetricId)) setSelectedMetricId(metrics[0]?.id ?? ''); }, [metrics, selectedMetricId]);
   const selectedMetric = metrics.find((metric) => metric.id === selectedMetricId);
   const metricRecords = records.filter((record) => record.metricId === selectedMetricId).sort((a, b) => b.date.localeCompare(a.date));
   const createMetric = async () => {
@@ -1214,7 +1280,7 @@ function GrowthPanel({ metrics, records, onSaveMetric, onSaveRecord }: { metrics
   };
   const oldest = [...metricRecords].sort((a, b) => a.date.localeCompare(b.date))[0];
   const newest = metricRecords[0];
-  return <div className="growth-panel"><div className="growth-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.metricPlaceholder} /><input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder={exerciseUi.unitPlaceholder} /><button className="secondary-button" onClick={createMetric}>{exerciseUi.createMetric}</button></div>{metrics.length === 0 ? <p className="empty-text">{exerciseUi.noMetric}</p> : <div className="growth-grid"><aside className="growth-metrics">{metrics.map((metric) => <button key={metric.id} className={metric.id === selectedMetricId ? 'active' : ''} onClick={() => setSelectedMetricId(metric.id)}>{metric.name}<span>{metric.unit}</span></button>)}</aside><section className="growth-records"><h3>{selectedMetric?.name}</h3>{oldest && newest ? <p className="muted">{exerciseUi.from} {oldest.value}{selectedMetric?.unit} {exerciseUi.to} {newest.value}{selectedMetric?.unit}{'\uff0c'}{exerciseUi.improved} {newest.value - oldest.value}{selectedMetric?.unit}</p> : null}<div className="growth-record-form"><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /><input type="number" value={value} onChange={(event) => setValue(event.target.value)} placeholder={exerciseUi.value} /><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={exerciseUi.note} /><button className="primary-button" onClick={createRecord}>{exerciseUi.addRecord}</button></div>{metricRecords.length === 0 ? <p className="empty-text">{exerciseUi.noGrowthRecord}</p> : <div className="growth-record-list">{metricRecords.map((record) => <div key={record.id}><strong>{record.date}</strong><span>{record.value}{selectedMetric?.unit}</span><em>{record.note || exerciseUi.noNote}</em></div>)}</div>}</section></div>}</div>;
+  return <div className="growth-panel"><div className="growth-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.metricPlaceholder} /><input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder={exerciseUi.unitPlaceholder} /><button className="secondary-button" onClick={createMetric}>{exerciseUi.createMetric}</button></div>{metrics.length === 0 ? <p className="empty-text">{exerciseUi.noMetric}</p> : <div className="growth-grid"><aside className="growth-metrics">{metrics.map((metric) => <div key={metric.id} className={metric.id === selectedMetricId ? 'growth-metric-row active' : 'growth-metric-row'}><button onClick={() => setSelectedMetricId(metric.id)}>{metric.name}<span>{metric.unit}</span></button><button className="danger-button compact" onClick={() => void onDeleteMetric(metric)}>{commonUi.delete}</button></div>)}</aside><section className="growth-records"><h3>{selectedMetric?.name}</h3>{oldest && newest ? <p className="muted">{exerciseUi.from} {oldest.value}{selectedMetric?.unit} {exerciseUi.to} {newest.value}{selectedMetric?.unit}{'\uff0c'}{exerciseUi.improved} {newest.value - oldest.value}{selectedMetric?.unit}</p> : null}<div className="growth-record-form"><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /><input type="number" value={value} onChange={(event) => setValue(event.target.value)} placeholder={exerciseUi.value} /><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={exerciseUi.note} /><button className="primary-button" onClick={createRecord}>{exerciseUi.addRecord}</button></div>{metricRecords.length === 0 ? <p className="empty-text">{exerciseUi.noGrowthRecord}</p> : <div className="growth-record-list">{metricRecords.map((record) => <div key={record.id}><strong>{record.date}</strong><span>{record.value}{selectedMetric?.unit}</span><em>{record.note || exerciseUi.noNote}</em></div>)}</div>}</section></div>}</div>;
 }
 
 function ExerciseTimeDistribution({ sessions }: { sessions: Session[] }) {
@@ -1256,19 +1322,20 @@ function buildMonthCells(monthCursor: Date) {
   return [...Array(offset).fill(null), ...Array.from({ length: days }, (_, index) => new Date(monthCursor.getFullYear(), monthCursor.getMonth(), index + 1))] as (Date | null)[];
 }
 
-function BasicPage({ title, description, mainCategory, projects, onCreateProject, onStartTimer, onManualSession }: {
+function BasicPage({ title, description, mainCategory, projects, onCreateProject, onDeleteProject, onStartTimer, onManualSession }: {
   title: string;
   description: string;
   mainCategory: MainCategory;
   projects: Project[];
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onDeleteProject: (project: Project) => Promise<void>;
   onStartTimer: (project: Project) => Promise<void>;
   onManualSession: (preset: ManualPreset) => void;
 }) {
   const [name, setName] = useState('');
   const categoryProjects = projects.filter((project) => project.mainCategory === mainCategory);
   const create = async () => { if (!name.trim()) return; await onCreateProject({ name, mainCategory, subCategory: 'general', status: 'active' }); setName(''); };
-  return <div className="placeholder-grid"><section className="panel"><h2>{title}</h2><p className="muted">{description}</p><div className="inline-form"><label className="stacked-field"><span>{T.projectName}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={T.createBasicProject} /></label><button className="primary-button" onClick={create}>{T.createProject}</button></div></section><section className="panel span-2"><h2>{T.basicEntry}</h2>{categoryProjects.length === 0 ? <p className="empty-text">{T.noProject}</p> : <div className="project-list horizontal">{categoryProjects.map((project) => <div className="simple-project" key={project.id}><strong>{project.name}</strong><div className="detail-actions"><button className="primary-button compact" onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory, subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button></div></div>)}</div>}</section></div>;
+  return <div className="placeholder-grid"><section className="panel"><h2>{title}</h2><p className="muted">{description}</p><div className="inline-form"><label className="stacked-field"><span>{T.projectName}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={T.createBasicProject} /></label><button className="primary-button" onClick={create}>{T.createProject}</button></div></section><section className="panel span-2"><h2>{T.basicEntry}</h2>{categoryProjects.length === 0 ? <p className="empty-text">{T.noProject}</p> : <div className="project-list horizontal">{categoryProjects.map((project) => <div className="simple-project" key={project.id}><strong>{project.name}</strong><div className="detail-actions"><button className="primary-button compact" onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory, subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button><button className="danger-button compact" onClick={() => void onDeleteProject(project)}>{commonUi.delete}</button></div></div>)}</div>}</section></div>;
 }
 
 function SessionList({ sessions }: { sessions: Session[] }) {

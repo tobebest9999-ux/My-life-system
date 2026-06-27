@@ -2552,3 +2552,50 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+.page-actions,
+.notion-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.notion-title-actions {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.project-table .danger-button,
+.exercise-card-actions .danger-button,
+.detail-actions .danger-button,
+.growth-metric-row .danger-button {
+  background: #fff5f4;
+  color: #a33a34;
+  border-color: #e6b7b3;
+}
+
+.growth-metric-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.growth-metric-row > button:first-child {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #dfe8e3;
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+}
+
+.growth-metric-row.active > button:first-child {
+  border-color: #19736a;
+  background: #eef7f4;
+}
+
+.growth-metric-row .danger-button {
+  align-self: center;
+}

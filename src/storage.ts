@@ -92,20 +92,27 @@ const remove = async (storeName: StoreName, id: string) => {
 export const storage = {
   getProjects: () => getAll<Project>('projects'),
   saveProject: (project: Project) => put('projects', project),
+  deleteProject: (id: string) => remove('projects', id),
   getSessions: () => getAll<Session>('sessions'),
   saveSession: (session: Session) => put('sessions', session),
   getWeeklyPlans: () => getAll<WeeklyPlan>('weeklyPlans'),
   saveWeeklyPlan: (plan: WeeklyPlan) => put('weeklyPlans', plan),
+  deleteWeeklyPlan: (id: string) => remove('weeklyPlans', id),
   getProjectImages: () => getAll<ProjectImage>('projectImages'),
   saveProjectImage: (image: ProjectImage) => put('projectImages', image),
+  deleteProjectImage: (id: string) => remove('projectImages', id),
   getProjectJournalEntries: () => getAll<ProjectJournalEntry>('projectJournalEntries'),
   saveProjectJournalEntry: (entry: ProjectJournalEntry) => put('projectJournalEntries', entry),
+  deleteProjectJournalEntry: (id: string) => remove('projectJournalEntries', id),
   getExercisePlans: () => getAll<ExercisePlan>('exercisePlans'),
   saveExercisePlan: (plan: ExercisePlan) => put('exercisePlans', plan),
+  deleteExercisePlan: (id: string) => remove('exercisePlans', id),
   getGrowthMetrics: () => getAll<GrowthMetric>('growthMetrics'),
   saveGrowthMetric: (metric: GrowthMetric) => put('growthMetrics', metric),
+  deleteGrowthMetric: (id: string) => remove('growthMetrics', id),
   getGrowthRecords: () => getAll<GrowthRecord>('growthRecords'),
   saveGrowthRecord: (record: GrowthRecord) => put('growthRecords', record),
+  deleteGrowthRecord: (id: string) => remove('growthRecords', id),
   getActiveTimer: async () => {
     const timers = await getAll<ActiveTimer>('activeTimer');
     return timers[0] ?? null;
