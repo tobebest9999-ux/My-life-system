@@ -29,6 +29,13 @@ export interface Project {
   updatedAt: string;
 }
 
+export interface SessionAttachment {
+  id: string;
+  data: string;
+  caption?: string;
+  createdAt: string;
+}
+
 export interface Session {
   id: string;
   mainCategory: MainCategory;
@@ -43,6 +50,7 @@ export interface Session {
   feelings: string;
   energyScore?: number;
   moodScore?: number;
+  attachments?: SessionAttachment[];
   createdAt: string;
   updatedAt: string;
 }

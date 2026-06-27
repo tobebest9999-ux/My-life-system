@@ -19,6 +19,7 @@ import type {
   ProjectJournalEntry,
   ProjectStatus,
   Session,
+  SessionAttachment,
   WeeklyPlan,
 } from './types';
 import {
@@ -252,16 +253,37 @@ function App() {
     await reload();
   };
 
+  const appendSessionToJournal = async (session: Session) => {
+    if (!session.projectId) return;
+    const date = toDateKey(new Date(session.startTime));
+    const entries = await storage.getProjectJournalEntries();
+    const existing = entries.find((entry) => entry.projectId === session.projectId && entry.date === date);
+    if (existing?.contentHtml.includes('data-session-id="' + session.id + '"')) return;
+
+    const timestamp = nowIso();
+    const blockHtml = buildSessionJournalBlock(session);
+    const nextEntry: ProjectJournalEntry = existing
+      ? { ...existing, contentHtml: appendHtmlBlock(existing.contentHtml, blockHtml), updatedAt: timestamp }
+      : { id: createId(), projectId: session.projectId, date, contentHtml: blockHtml, createdAt: timestamp, updatedAt: timestamp };
+
+    await storage.saveProjectJournalEntry(nextEntry);
+    setJournalEntries((current) => {
+      const next = current.filter((item) => item.id !== nextEntry.id);
+      return sortByCreated([...next, nextEntry]);
+    });
+  };
+
   const saveSession = async (session: Session) => {
     await storage.saveSession(session);
+    await appendSessionToJournal(session);
     await reload();
   };
 
-  const finishTimer = async (content: string, feelings: string, moodScore?: number, energyScore?: number) => {
+  const finishTimer = async (content: string, feelings: string, moodScore?: number, energyScore?: number, attachments: SessionAttachment[] = []) => {
     if (!activeTimer) return;
     const endTime = nowIso();
     const timestamp = nowIso();
-    await storage.saveSession({
+    const session: Session = {
       id: createId(),
       mainCategory: activeTimer.mainCategory,
       subCategory: activeTimer.subCategory,
@@ -275,9 +297,12 @@ function App() {
       feelings,
       moodScore,
       energyScore,
+      attachments,
       createdAt: timestamp,
       updatedAt: timestamp,
-    });
+    };
+    await storage.saveSession(session);
+    await appendSessionToJournal(session);
     await storage.clearActiveTimer();
     setDialog(null);
     await reload();
@@ -400,31 +425,33 @@ function DashboardPage({ projects, sessions, plans, activeTimer, onQuickStart, o
   const totals = useMemo(() => summarizeByMainCategory(sessions), [sessions]);
   const suggestions = useMemo(() => generateDashboardSuggestions(sessions, plans), [sessions, plans]);
   return (
-    <div className="dashboard-fill-layout">
-      <div className="dashboard-main-stack">
-        <section className="panel">
-          <div className="section-heading"><h2>{T.quickStart}</h2><button className="ghost-button" onClick={onManualSession}>{T.manualSession}</button></div>
-          <div className="quick-grid">
-            {mainCategoryOptions.map((category) => <button key={category} className="quick-button" onClick={() => onQuickStart(category)}>{'\u5f00\u59cb' + mainCategoryLabels[category]}</button>)}
-          </div>
-        </section>
-        <section className="panel">
-          <h2>{T.timeDistribution}</h2>
-          <PieTimeDistribution totals={totals} />
-        </section>
-        <section className="panel"><WeeklyPlanPanel projects={projects} plans={plans} onSavePlan={onSavePlan} /></section>
-      </div>
-      <div className="dashboard-side-stack">
-        <section className="panel dashboard-calendar-corner"><DashboardCalendar sessions={sessions} plans={plans} /></section>
-        <section className="panel">
-          <h2>{T.activeTimer}</h2>
-          {activeTimer ? <ActiveTimerCard timer={activeTimer} onEndTimer={onEndTimer} /> : <p className="empty-text">{T.noActiveTimer}</p>}
-        </section>
-        <section className="panel">
-          <h2>{T.recentRecords}</h2>
-          {sessions.length === 0 ? <p className="empty-text">{T.noRecords}</p> : <SessionList sessions={sessions.slice(0, 6)} />}
-        </section>
-        <section className="panel"><h2>{T.suggestions}</h2><div className="suggestion-list">{suggestions.map((item) => <div className={'suggestion ' + item.severity} key={item.id}>{item.message}</div>)}</div></section>
+    <div className="dashboard-page-v3">
+      <section className="panel dashboard-quick-panel">
+        <div className="section-heading"><h2>{T.quickStart}</h2><button className="ghost-button" onClick={onManualSession}>{T.manualSession}</button></div>
+        <div className="quick-grid">
+          {mainCategoryOptions.map((category) => <button key={category} className="quick-button" onClick={() => onQuickStart(category)}>{'\u5f00\u59cb' + mainCategoryLabels[category]}</button>)}
+        </div>
+      </section>
+      <div className="dashboard-content-v3">
+        <div className="dashboard-column-primary">
+          <section className="panel dashboard-active-panel">
+            <h2>{T.activeTimer}</h2>
+            {activeTimer ? <ActiveTimerCard timer={activeTimer} onEndTimer={onEndTimer} /> : <p className="empty-text">{T.noActiveTimer}</p>}
+          </section>
+          <section className="panel">
+            <h2>{T.timeDistribution}</h2>
+            <PieTimeDistribution totals={totals} />
+          </section>
+          <section className="panel"><WeeklyPlanPanel projects={projects} plans={plans} onSavePlan={onSavePlan} /></section>
+        </div>
+        <div className="dashboard-column-secondary">
+          <section className="panel">
+            <h2>{T.recentRecords}</h2>
+            {sessions.length === 0 ? <p className="empty-text">{T.noRecords}</p> : <SessionList sessions={sessions.slice(0, 6)} />}
+          </section>
+          <section className="panel"><h2>{T.suggestions}</h2><div className="suggestion-list">{suggestions.map((item) => <div className={'suggestion ' + item.severity} key={item.id}>{item.message}</div>)}</div></section>
+          <section className="panel dashboard-calendar-corner"><DashboardCalendar sessions={sessions} plans={plans} /></section>
+        </div>
       </div>
     </div>
   );
@@ -528,12 +555,13 @@ function QuickStartDialog({ initialCategory, projects, onClose, onCreateProject,
   return <Dialog title={T.quickStart} onClose={onClose}><div className="form-grid"><SelectMainCategory value={mainCategory} onChange={changeCategory} /><SelectSubCategory mainCategory={mainCategory} value={subCategory} onChange={setSubCategory} /><label className="full-width"><span>{T.chooseProject}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{T.selectProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="full-width"><span>{T.createProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={T.projectPlaceholder} /></label></div>{error ? <p className="error-text">{error}</p> : null}<DialogActions onCancel={onClose} actionLabel={T.startTimer} onAction={submit} /></Dialog>;
 }
 
-function TimerEndDialog({ timer, onClose, onSave }: { timer: ActiveTimer; onClose: () => void; onSave: (content: string, feelings: string, moodScore?: number, energyScore?: number) => Promise<void> }) {
+function TimerEndDialog({ timer, onClose, onSave }: { timer: ActiveTimer; onClose: () => void; onSave: (content: string, feelings: string, moodScore?: number, energyScore?: number, attachments?: SessionAttachment[]) => Promise<void> }) {
   const [content, setContent] = useState('');
   const [feelings, setFeelings] = useState('');
   const [moodScore, setMoodScore] = useState(3);
   const [energyScore, setEnergyScore] = useState(3);
-  return <Dialog title={T.endTimer} onClose={onClose}><div className="timer-summary"><strong>{timer.projectNameSnapshot}</strong><span>{mainCategoryLabels[timer.mainCategory]} / {getSubCategoryLabel(timer.mainCategory, timer.subCategory)}</span></div><TextArea label={T.whatDone} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><div className="form-grid"><NumberField label={T.moodScore} value={moodScore} onChange={setMoodScore} /><NumberField label={T.energyScore} value={energyScore} onChange={setEnergyScore} /></div><DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={() => onSave(content, feelings, moodScore, energyScore)} /></Dialog>;
+  const [attachments, setAttachments] = useState<SessionAttachment[]>([]);
+  return <Dialog title={T.endTimer} onClose={onClose}><div className="timer-summary"><strong>{timer.projectNameSnapshot}</strong><span>{mainCategoryLabels[timer.mainCategory]} / {getSubCategoryLabel(timer.mainCategory, timer.subCategory)}</span></div><TextArea label={T.whatDone} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} /><div className="form-grid"><NumberField label={T.moodScore} value={moodScore} onChange={setMoodScore} /><NumberField label={T.energyScore} value={energyScore} onChange={setEnergyScore} /></div><DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={() => onSave(content, feelings, moodScore, energyScore, attachments)} /></Dialog>;
 }
 
 function ManualSessionDialog({ preset, projects, onClose, onCreateProject, onSave }: {
@@ -551,6 +579,7 @@ function ManualSessionDialog({ preset, projects, onClose, onCreateProject, onSav
   const [endTime, setEndTime] = useState(toInputDateTime());
   const [content, setContent] = useState('');
   const [feelings, setFeelings] = useState('');
+  const [attachments, setAttachments] = useState<SessionAttachment[]>([]);
   const [error, setError] = useState('');
   const available = projects.filter((project) => project.mainCategory === mainCategory && project.subCategory === subCategory);
   const changeCategory = (value: MainCategory) => { setMainCategory(value); setSubCategory(defaultSubCategory[value]); setProjectId(''); };
@@ -566,9 +595,9 @@ function ManualSessionDialog({ preset, projects, onClose, onCreateProject, onSav
     if (!project && newName.trim()) project = await onCreateProject({ name: newName, mainCategory, subCategory, status: 'active' });
     if (!project) { setError(T.noProjectValidation); return; }
     const timestamp = nowIso();
-    await onSave({ id: createId(), mainCategory, subCategory, projectId: project.id, projectNameSnapshot: project.name, source: 'manual', startTime: startIso, endTime: endIso, durationMinutes: minutesBetween(startIso, endIso), content, feelings, createdAt: timestamp, updatedAt: timestamp });
+    await onSave({ id: createId(), mainCategory, subCategory, projectId: project.id, projectNameSnapshot: project.name, source: 'manual', startTime: startIso, endTime: endIso, durationMinutes: minutesBetween(startIso, endIso), content, feelings, attachments, createdAt: timestamp, updatedAt: timestamp });
   };
-  return <Dialog title={T.manualSession} onClose={onClose}><div className="form-grid"><SelectMainCategory value={mainCategory} onChange={changeCategory} /><SelectSubCategory mainCategory={mainCategory} value={subCategory} onChange={setSubCategory} /><label><span>{T.startTime}</span><input type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label><label><span>{T.endTime}</span><input type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label><label className="full-width"><span>{T.project}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{T.selectProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="full-width"><span>{T.createProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={T.projectPlaceholder} /></label></div><TextArea label={T.whatDone} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} />{error ? <p className="error-text">{error}</p> : null}<DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={submit} /></Dialog>;
+  return <Dialog title={T.manualSession} onClose={onClose}><div className="form-grid"><SelectMainCategory value={mainCategory} onChange={changeCategory} /><SelectSubCategory mainCategory={mainCategory} value={subCategory} onChange={setSubCategory} /><label><span>{T.startTime}</span><input type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label><label><span>{T.endTime}</span><input type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label><label className="full-width"><span>{T.project}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{T.selectProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="full-width"><span>{T.createProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={T.projectPlaceholder} /></label></div><TextArea label={T.whatDone} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} />{error ? <p className="error-text">{error}</p> : null}<DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={submit} /></Dialog>;
 }
 
 function WeeklyPlanPanel({ projects, plans, onSavePlan }: { projects: Project[]; plans: WeeklyPlan[]; onSavePlan: (plan: WeeklyPlan) => Promise<void> }) {
@@ -808,7 +837,37 @@ function NotebookEditor({ value, onChange }: { value: string; onChange: (value: 
 
 function DailySessionSummary({ sessions }: { sessions: Session[] }) {
   if (sessions.length === 0) return null;
-  return <div className="daily-session-summary"><h5>{'\u5f53\u5929\u65f6\u95f4\u8bb0\u5f55'}</h5>{sessions.map((session) => <div className="daily-session-card" key={session.id}><strong>{formatTimeOnly(session.startTime)} - {formatTimeOnly(session.endTime)} / {formatDuration(session.durationMinutes)}</strong>{session.content ? <span>{session.content}</span> : null}{session.feelings ? <em>{session.feelings}</em> : null}</div>)}</div>;
+  return <div className="daily-session-summary"><h5>{'\u5f53\u5929\u65f6\u95f4\u8bb0\u5f55'}</h5>{sessions.map((session) => <div className="daily-session-card" key={session.id}><strong>{formatTimeOnly(session.startTime)} - {formatTimeOnly(session.endTime)} / {formatDuration(session.durationMinutes)}</strong>{session.content ? <span>{session.content}</span> : null}{session.feelings ? <em>{session.feelings}</em> : null}{session.attachments?.length ? <div className="daily-session-images">{session.attachments.map((image) => <img key={image.id} src={image.data} alt={image.caption || '\u672c\u6b21\u56fe\u7247'} />)}</div> : null}</div>)}</div>;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
+}
+
+function appendHtmlBlock(existingHtml: string, blockHtml: string) {
+  const existing = existingHtml.trim();
+  return existing ? existing + '\n' + blockHtml : blockHtml;
+}
+
+function buildSessionJournalBlock(session: Session) {
+  const content = session.content.trim() ? '<p>' + escapeHtml(session.content).replace(/\n/g, '<br />') + '</p>' : '';
+  const feelings = session.feelings.trim() ? '<p><strong>\u4e8b\u540e\u611f\u53d7\uff1a</strong>' + escapeHtml(session.feelings).replace(/\n/g, '<br />') + '</p>' : '';
+  const scores = [
+    typeof session.moodScore === 'number' ? '\u5fc3\u60c5 ' + session.moodScore + '/5' : '',
+    typeof session.energyScore === 'number' ? '\u7cbe\u529b ' + session.energyScore + '/5' : '',
+  ].filter(Boolean).join(' / ');
+  const scoreLine = scores ? '<p class="journal-session-scores">' + escapeHtml(scores) + '</p>' : '';
+  const images = session.attachments?.length
+    ? '<div class="journal-session-images">' + session.attachments.map((image) => '<img src="' + escapeHtml(image.data) + '" alt="' + escapeHtml(image.caption || '\u672c\u6b21\u56fe\u7247') + '" />').join('') + '</div>'
+    : '';
+
+  return '<section class="journal-session-block" data-session-id="' + escapeHtml(session.id) + '">'
+    + '<h5>' + escapeHtml(session.projectNameSnapshot) + ' / ' + formatTimeOnly(session.startTime) + ' - ' + formatTimeOnly(session.endTime) + ' / ' + formatDuration(session.durationMinutes) + '</h5>'
+    + content
+    + feelings
+    + scoreLine
+    + images
+    + '</section>';
 }
 
 function formatJournalDate(dateKey: string) {
@@ -853,6 +912,28 @@ function SelectMainCategory({ value, onChange }: { value: MainCategory; onChange
 
 function SelectSubCategory({ mainCategory, value, onChange }: { mainCategory: MainCategory; value: string; onChange: (value: string) => void }) {
   return <label><span>{T.subCategory}</span><select value={value} onChange={(event) => onChange(event.target.value)}>{Object.entries(subCategoryLabels[mainCategory]).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>;
+}
+
+function SessionAttachmentPicker({ attachments, onChange }: { attachments: SessionAttachment[]; onChange: (attachments: SessionAttachment[]) => void }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const addFile = (file?: File) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return;
+      onChange([...attachments, { id: createId(), data: reader.result, createdAt: nowIso() }]);
+    };
+    reader.readAsDataURL(file);
+  };
+  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    const files = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith('image/'));
+    if (files.length === 0) return;
+    event.preventDefault();
+    files.forEach(addFile);
+  };
+  const remove = (id: string) => onChange(attachments.filter((item) => item.id !== id));
+
+  return <div className="session-attachment-box" onPaste={handlePaste} tabIndex={0}><div className="attachment-box-header"><strong>{'\u672c\u6b21\u56fe\u7247'}</strong><button className="secondary-button compact" type="button" onClick={() => fileInputRef.current?.click()}>{'\u9009\u62e9\u56fe\u7247'}</button><input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => { Array.from(event.target.files ?? []).forEach(addFile); event.currentTarget.value = ''; }} /></div><p>{'\u53ef\u4ee5\u76f4\u63a5\u628a\u622a\u56fe\u6216\u56fe\u7247\u7c98\u8d34\u5230\u8fd9\u91cc\uff0c\u4e5f\u53ef\u4ee5\u9009\u62e9\u672c\u5730\u56fe\u7247\u3002'}</p>{attachments.length > 0 ? <div className="session-attachment-grid">{attachments.map((item) => <figure key={item.id}><img src={item.data} alt={'\u672c\u6b21\u56fe\u7247'} /><button type="button" onClick={() => remove(item.id)}>{'\u5220\u9664'}</button></figure>)}</div> : null}</div>;
 }
 
 function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
