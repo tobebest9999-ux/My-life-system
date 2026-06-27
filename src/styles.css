@@ -1867,3 +1867,208 @@ textarea {
     grid-column: auto;
   }
 }
+
+
+/* Dashboard sketch layout requested by user */
+.dashboard-sketch-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.dashboard-sketch-layout .panel {
+  min-height: 190px;
+  padding: 28px;
+  overflow: visible;
+}
+
+.dashboard-sketch-layout .sketch-full-row {
+  grid-column: 1 / -1;
+}
+
+.dashboard-sketch-layout .dashboard-quick-panel {
+  min-height: 180px;
+}
+
+.dashboard-sketch-layout .dashboard-quick-panel .quick-grid {
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 14px;
+}
+
+.dashboard-sketch-layout .dashboard-quick-panel .quick-button {
+  min-height: 92px;
+  font-size: 19px;
+}
+
+.dashboard-sketch-layout .dashboard-active-panel .active-timer {
+  grid-template-columns: minmax(190px, 0.7fr) minmax(220px, 1fr);
+  gap: 18px 24px;
+  align-items: center;
+}
+
+.dashboard-sketch-layout .dashboard-active-panel .timer-label,
+.dashboard-sketch-layout .dashboard-active-panel .clock-wrap {
+  grid-column: 1;
+}
+
+.dashboard-sketch-layout .dashboard-active-panel .active-timer h3,
+.dashboard-sketch-layout .dashboard-active-panel .active-timer p,
+.dashboard-sketch-layout .dashboard-active-panel .active-timer .danger-button {
+  grid-column: 2;
+}
+
+.dashboard-sketch-layout .dashboard-active-panel .clock-wrap {
+  transform: none;
+  margin: 0;
+}
+
+.dashboard-sketch-layout .calendar-panel {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.dashboard-sketch-layout .record-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.dashboard-sketch-layout .record-row {
+  min-width: 0;
+}
+
+.dashboard-sketch-layout .suggestion-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.dashboard-sketch-layout .suggestion {
+  line-height: 1.55;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-sketch-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-sketch-layout .sketch-full-row,
+  .dashboard-sketch-layout .sketch-half-row {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-sketch-layout .panel {
+    min-height: auto;
+    padding: 20px;
+  }
+
+  .dashboard-sketch-layout .dashboard-quick-panel .quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-sketch-layout .dashboard-active-panel .active-timer {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-sketch-layout .dashboard-active-panel .timer-label,
+  .dashboard-sketch-layout .dashboard-active-panel .clock-wrap,
+  .dashboard-sketch-layout .dashboard-active-panel .active-timer h3,
+  .dashboard-sketch-layout .dashboard-active-panel .active-timer p,
+  .dashboard-sketch-layout .dashboard-active-panel .active-timer .danger-button {
+    grid-column: auto;
+  }
+}
+
+
+/* Force dashboard sketch grid positions */
+.dashboard-sketch-layout .dashboard-calendar-corner {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.dashboard-sketch-layout > section:nth-child(1) {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.dashboard-sketch-layout > section:nth-child(2) {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.dashboard-sketch-layout > section:nth-child(3) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.dashboard-sketch-layout > section:nth-child(4) {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.dashboard-sketch-layout > section:nth-child(5) {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.dashboard-sketch-layout > section:nth-child(6) {
+  grid-column: 1 / -1;
+  grid-row: 4;
+}
+
+.dashboard-sketch-layout > section:nth-child(7) {
+  grid-column: 1 / -1;
+  grid-row: 5;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-sketch-layout > section:nth-child(n) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+
+/* Historical journal session visibility */
+.session-first-journal-page .daily-session-summary {
+  margin-bottom: 16px;
+}
+
+.compact-paper-editor {
+  min-height: 180px;
+  padding-top: 26px;
+  padding-bottom: 26px;
+}
+
+
+/* Separate readonly sessions from editable paper */
+.paper-journal-page .daily-session-summary {
+  max-width: 860px;
+  margin: 18px auto 0;
+  padding: 14px 16px;
+  background: #f5f8f6;
+  border: 1px solid #dfe9e4;
+  border-left: 4px solid #16645a;
+  border-radius: 6px;
+  user-select: text;
+}
+
+.paper-journal-page .daily-session-summary h5::after {
+  content: " \00b7 \53ea\8bfb";
+  color: #87928d;
+  font-weight: 500;
+}
+
+.paper-journal-page .daily-session-card {
+  background: #ffffff;
+  border-color: #e5eee9;
+}
+
+.compact-paper-editor {
+  min-height: 520px;
+  padding-top: 54px;
+  padding-bottom: 54px;
+}

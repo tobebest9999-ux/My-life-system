@@ -253,29 +253,8 @@ function App() {
     await reload();
   };
 
-  const appendSessionToJournal = async (session: Session) => {
-    if (!session.projectId) return;
-    const date = toDateKey(new Date(session.startTime));
-    const entries = await storage.getProjectJournalEntries();
-    const existing = entries.find((entry) => entry.projectId === session.projectId && entry.date === date);
-    if (existing?.contentHtml.includes('data-session-id="' + session.id + '"')) return;
-
-    const timestamp = nowIso();
-    const blockHtml = buildSessionJournalBlock(session);
-    const nextEntry: ProjectJournalEntry = existing
-      ? { ...existing, contentHtml: appendHtmlBlock(existing.contentHtml, blockHtml), updatedAt: timestamp }
-      : { id: createId(), projectId: session.projectId, date, contentHtml: blockHtml, createdAt: timestamp, updatedAt: timestamp };
-
-    await storage.saveProjectJournalEntry(nextEntry);
-    setJournalEntries((current) => {
-      const next = current.filter((item) => item.id !== nextEntry.id);
-      return sortByCreated([...next, nextEntry]);
-    });
-  };
-
   const saveSession = async (session: Session) => {
     await storage.saveSession(session);
-    await appendSessionToJournal(session);
     await reload();
   };
 
@@ -302,7 +281,6 @@ function App() {
       updatedAt: timestamp,
     };
     await storage.saveSession(session);
-    await appendSessionToJournal(session);
     await storage.clearActiveTimer();
     setDialog(null);
     await reload();
@@ -425,34 +403,28 @@ function DashboardPage({ projects, sessions, plans, activeTimer, onQuickStart, o
   const totals = useMemo(() => summarizeByMainCategory(sessions), [sessions]);
   const suggestions = useMemo(() => generateDashboardSuggestions(sessions, plans), [sessions, plans]);
   return (
-    <div className="dashboard-page-v3">
-      <section className="panel dashboard-quick-panel">
+    <div className="dashboard-sketch-layout">
+      <section className="panel dashboard-quick-panel sketch-full-row">
         <div className="section-heading"><h2>{T.quickStart}</h2><button className="ghost-button" onClick={onManualSession}>{T.manualSession}</button></div>
         <div className="quick-grid">
           {mainCategoryOptions.map((category) => <button key={category} className="quick-button" onClick={() => onQuickStart(category)}>{'\u5f00\u59cb' + mainCategoryLabels[category]}</button>)}
         </div>
       </section>
-      <div className="dashboard-content-v3">
-        <div className="dashboard-column-primary">
-          <section className="panel dashboard-active-panel">
-            <h2>{T.activeTimer}</h2>
-            {activeTimer ? <ActiveTimerCard timer={activeTimer} onEndTimer={onEndTimer} /> : <p className="empty-text">{T.noActiveTimer}</p>}
-          </section>
-          <section className="panel">
-            <h2>{T.timeDistribution}</h2>
-            <PieTimeDistribution totals={totals} />
-          </section>
-          <section className="panel"><WeeklyPlanPanel projects={projects} plans={plans} onSavePlan={onSavePlan} /></section>
-        </div>
-        <div className="dashboard-column-secondary">
-          <section className="panel">
-            <h2>{T.recentRecords}</h2>
-            {sessions.length === 0 ? <p className="empty-text">{T.noRecords}</p> : <SessionList sessions={sessions.slice(0, 6)} />}
-          </section>
-          <section className="panel"><h2>{T.suggestions}</h2><div className="suggestion-list">{suggestions.map((item) => <div className={'suggestion ' + item.severity} key={item.id}>{item.message}</div>)}</div></section>
-          <section className="panel dashboard-calendar-corner"><DashboardCalendar sessions={sessions} plans={plans} /></section>
-        </div>
-      </div>
+      <section className="panel dashboard-active-panel sketch-half-row">
+        <h2>{T.activeTimer}</h2>
+        {activeTimer ? <ActiveTimerCard timer={activeTimer} onEndTimer={onEndTimer} /> : <p className="empty-text">{T.noActiveTimer}</p>}
+      </section>
+      <section className="panel dashboard-calendar-corner sketch-half-row"><DashboardCalendar sessions={sessions} plans={plans} /></section>
+      <section className="panel sketch-half-row">
+        <h2>{T.timeDistribution}</h2>
+        <PieTimeDistribution totals={totals} />
+      </section>
+      <section className="panel sketch-half-row"><WeeklyPlanPanel projects={projects} plans={plans} onSavePlan={onSavePlan} /></section>
+      <section className="panel sketch-full-row">
+        <h2>{T.recentRecords}</h2>
+        {sessions.length === 0 ? <p className="empty-text">{T.noRecords}</p> : <SessionList sessions={sessions.slice(0, 6)} />}
+      </section>
+      <section className="panel sketch-full-row"><h2>{T.suggestions}</h2><div className="suggestion-list">{suggestions.map((item) => <div className={'suggestion ' + item.severity} key={item.id}>{item.message}</div>)}</div></section>
     </div>
   );
 }
@@ -728,10 +700,12 @@ function ProjectNotebook({ project, sessions, journalEntries, onSaveJournalEntry
 }) {
   const today = toDateKey(new Date());
   const entryByDate = new Map(journalEntries.map((entry) => [entry.date, entry]));
-  const archivedEntries = journalEntries
-    .filter((entry) => entry.date !== today && hasMeaningfulJournalContent(entry.contentHtml))
-    .sort((a, b) => b.date.localeCompare(a.date));
-  const entriesToShow = [today, ...archivedEntries.map((entry) => entry.date)];
+  const dateSet = new Set<string>([today]);
+  journalEntries.forEach((entry) => {
+    if (hasMeaningfulJournalContent(entry.contentHtml)) dateSet.add(entry.date);
+  });
+  sessions.forEach((session) => dateSet.add(toDateKey(new Date(session.startTime))));
+  const entriesToShow = Array.from(dateSet).sort((a, b) => b.localeCompare(a));
 
   return (
     <section className="project-notebook paper-notebook" aria-label={'\u9879\u76ee\u65e5\u8bb0'}>
@@ -751,27 +725,31 @@ function DailyJournalPage({ project, date, entry, sessions, onSaveJournalEntry }
   sessions: Session[];
   onSaveJournalEntry: (entry: ProjectJournalEntry) => Promise<void>;
 }) {
-  const [contentHtml, setContentHtml] = useState(entry?.contentHtml ?? '');
+  const [contentHtml, setContentHtml] = useState(stripSessionJournalBlocks(entry?.contentHtml ?? ''));
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const saveTimerRef = useRef<number | null>(null);
 
-  useEffect(() => setContentHtml(entry?.contentHtml ?? ''), [entry?.id, entry?.contentHtml, date]);
+  useEffect(() => setContentHtml(stripSessionJournalBlocks(entry?.contentHtml ?? '')), [entry?.id, entry?.contentHtml, date]);
   useEffect(() => () => { if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current); }, []);
 
   const save = async (nextContentHtml: string) => {
-    if (!hasMeaningfulJournalContent(nextContentHtml) && !entry) return;
+    const cleanHtml = stripSessionJournalBlocks(nextContentHtml);
+    if (!hasMeaningfulJournalContent(cleanHtml) && !entry) return;
     setSaveState('saving');
     const timestamp = nowIso();
-    await onSaveJournalEntry({ id: entry?.id ?? createId(), projectId: project.id, date, contentHtml: nextContentHtml, createdAt: entry?.createdAt ?? timestamp, updatedAt: timestamp });
+    await onSaveJournalEntry({ id: entry?.id ?? createId(), projectId: project.id, date, contentHtml: cleanHtml, createdAt: entry?.createdAt ?? timestamp, updatedAt: timestamp });
     setSaveState('saved');
   };
 
   const scheduleSave = (nextContentHtml: string) => {
-    setContentHtml(nextContentHtml);
-    setSaveState(hasMeaningfulJournalContent(nextContentHtml) ? 'saving' : 'idle');
+    const cleanHtml = stripSessionJournalBlocks(nextContentHtml);
+    setContentHtml(cleanHtml);
+    setSaveState(hasMeaningfulJournalContent(cleanHtml) ? 'saving' : 'idle');
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = window.setTimeout(() => void save(nextContentHtml), 700);
+    saveTimerRef.current = window.setTimeout(() => void save(cleanHtml), 700);
   };
+
+  const isToday = date === toDateKey(new Date());
 
   return (
     <article className="daily-journal-page paper-journal-page">
@@ -779,13 +757,13 @@ function DailyJournalPage({ project, date, entry, sessions, onSaveJournalEntry }
         <h4>{formatJournalDate(date)}</h4>
         <span>{saveState === 'saving' ? '\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58' : saveState === 'saved' ? '\u5df2\u81ea\u52a8\u4fdd\u5b58' : sessions.length > 0 ? sessions.length + ' \u6761\u65f6\u95f4\u8bb0\u5f55' : ''}</span>
       </header>
-      <NotebookEditor value={contentHtml} onChange={scheduleSave} />
+      <NotebookEditor value={contentHtml} onChange={scheduleSave} placeholder={isToday ? '\u4eca\u5929\u8fd8\u6ca1\u6709\u5199\u5185\u5bb9\uff0c\u53ef\u4ee5\u76f4\u63a5\u4ece\u8fd9\u91cc\u5f00\u59cb\u3002\u590d\u5236\u56fe\u7247\u540e\u7c98\u8d34\u5230\u8fd9\u91cc\u4e5f\u53ef\u4ee5\u3002' : '\u53ef\u4ee5\u5728\u8fd9\u91cc\u8865\u5145\u8fd9\u4e00\u5929\u7684\u624b\u5199\u5185\u5bb9\u3002'} />
       <DailySessionSummary sessions={sessions} />
     </article>
   );
 }
 
-function NotebookEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function NotebookEditor({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
   const editorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -829,7 +807,7 @@ function NotebookEditor({ value, onChange }: { value: string; onChange: (value: 
         suppressContentEditableWarning
         onInput={syncContent}
         onPaste={handlePaste}
-        data-placeholder={'\u4eca\u5929\u8fd8\u6ca1\u6709\u5199\u5185\u5bb9\uff0c\u53ef\u4ee5\u76f4\u63a5\u4ece\u8fd9\u91cc\u5f00\u59cb\u3002\u590d\u5236\u56fe\u7247\u540e\u7c98\u8d34\u5230\u8fd9\u91cc\u4e5f\u53ef\u4ee5\u3002'}
+        data-placeholder={placeholder}
       />
     </div>
   );
@@ -844,30 +822,31 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
 }
 
-function appendHtmlBlock(existingHtml: string, blockHtml: string) {
-  const existing = existingHtml.trim();
-  return existing ? existing + '\n' + blockHtml : blockHtml;
-}
+function stripSessionJournalBlocks(html: string) {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll('.journal-session-block').forEach((node) => {
+    const keepNodes: Node[] = [];
+    let skippedSessionContent = false;
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        if (child.textContent?.trim()) keepNodes.push(child.cloneNode(true));
+        return;
+      }
 
-function buildSessionJournalBlock(session: Session) {
-  const content = session.content.trim() ? '<p>' + escapeHtml(session.content).replace(/\n/g, '<br />') + '</p>' : '';
-  const feelings = session.feelings.trim() ? '<p><strong>\u4e8b\u540e\u611f\u53d7\uff1a</strong>' + escapeHtml(session.feelings).replace(/\n/g, '<br />') + '</p>' : '';
-  const scores = [
-    typeof session.moodScore === 'number' ? '\u5fc3\u60c5 ' + session.moodScore + '/5' : '',
-    typeof session.energyScore === 'number' ? '\u7cbe\u529b ' + session.energyScore + '/5' : '',
-  ].filter(Boolean).join(' / ');
-  const scoreLine = scores ? '<p class="journal-session-scores">' + escapeHtml(scores) + '</p>' : '';
-  const images = session.attachments?.length
-    ? '<div class="journal-session-images">' + session.attachments.map((image) => '<img src="' + escapeHtml(image.data) + '" alt="' + escapeHtml(image.caption || '\u672c\u6b21\u56fe\u7247') + '" />').join('') + '</div>'
-    : '';
-
-  return '<section class="journal-session-block" data-session-id="' + escapeHtml(session.id) + '">'
-    + '<h5>' + escapeHtml(session.projectNameSnapshot) + ' / ' + formatTimeOnly(session.startTime) + ' - ' + formatTimeOnly(session.endTime) + ' / ' + formatDuration(session.durationMinutes) + '</h5>'
-    + content
-    + feelings
-    + scoreLine
-    + images
-    + '</section>';
+      if (!(child instanceof HTMLElement)) return;
+      if (child.matches('h5, .journal-session-scores, .journal-session-images')) return;
+      if (child.querySelector('strong')?.textContent?.includes('????')) return;
+      if (child.tagName.toLowerCase() === 'p' && !skippedSessionContent) {
+        skippedSessionContent = true;
+        return;
+      }
+      keepNodes.push(child.cloneNode(true));
+    });
+    keepNodes.forEach((child) => node.parentNode?.insertBefore(child, node));
+    node.remove();
+  });
+  return template.innerHTML.trim();
 }
 
 function formatJournalDate(dateKey: string) {
