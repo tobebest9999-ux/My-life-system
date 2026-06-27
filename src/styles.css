@@ -2072,3 +2072,49 @@ textarea {
   padding-top: 54px;
   padding-bottom: 54px;
 }
+
+
+/* Complete readonly session cards above paper */
+.paper-journal-page .daily-session-summary {
+  margin: 0 auto 18px;
+}
+
+.daily-session-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.daily-session-card-head strong {
+  font-size: 16px;
+}
+
+.daily-session-card-head span,
+.daily-session-meta {
+  color: #66736e;
+  font-size: 14px;
+}
+
+.daily-session-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  line-height: 1.65;
+}
+
+.daily-session-field b {
+  color: #1b2724;
+}
+
+.daily-session-field span {
+  color: #263530;
+}
+
+@media (max-width: 760px) {
+  .daily-session-card-head,
+  .daily-session-field {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}

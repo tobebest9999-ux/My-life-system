@@ -757,8 +757,8 @@ function DailyJournalPage({ project, date, entry, sessions, onSaveJournalEntry }
         <h4>{formatJournalDate(date)}</h4>
         <span>{saveState === 'saving' ? '\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58' : saveState === 'saved' ? '\u5df2\u81ea\u52a8\u4fdd\u5b58' : sessions.length > 0 ? sessions.length + ' \u6761\u65f6\u95f4\u8bb0\u5f55' : ''}</span>
       </header>
-      <NotebookEditor value={contentHtml} onChange={scheduleSave} placeholder={isToday ? '\u4eca\u5929\u8fd8\u6ca1\u6709\u5199\u5185\u5bb9\uff0c\u53ef\u4ee5\u76f4\u63a5\u4ece\u8fd9\u91cc\u5f00\u59cb\u3002\u590d\u5236\u56fe\u7247\u540e\u7c98\u8d34\u5230\u8fd9\u91cc\u4e5f\u53ef\u4ee5\u3002' : '\u53ef\u4ee5\u5728\u8fd9\u91cc\u8865\u5145\u8fd9\u4e00\u5929\u7684\u624b\u5199\u5185\u5bb9\u3002'} />
       <DailySessionSummary sessions={sessions} />
+      <NotebookEditor value={contentHtml} onChange={scheduleSave} placeholder={isToday ? '\u4eca\u5929\u8fd8\u6ca1\u6709\u5199\u5185\u5bb9\uff0c\u53ef\u4ee5\u76f4\u63a5\u4ece\u8fd9\u91cc\u5f00\u59cb\u3002\u590d\u5236\u56fe\u7247\u540e\u7c98\u8d34\u5230\u8fd9\u91cc\u4e5f\u53ef\u4ee5\u3002' : '\u53ef\u4ee5\u5728\u8fd9\u91cc\u8865\u5145\u8fd9\u4e00\u5929\u7684\u624b\u5199\u5185\u5bb9\u3002'} />
     </article>
   );
 }
@@ -815,7 +815,30 @@ function NotebookEditor({ value, onChange, placeholder }: { value: string; onCha
 
 function DailySessionSummary({ sessions }: { sessions: Session[] }) {
   if (sessions.length === 0) return null;
-  return <div className="daily-session-summary"><h5>{'\u5f53\u5929\u65f6\u95f4\u8bb0\u5f55'}</h5>{sessions.map((session) => <div className="daily-session-card" key={session.id}><strong>{formatTimeOnly(session.startTime)} - {formatTimeOnly(session.endTime)} / {formatDuration(session.durationMinutes)}</strong>{session.content ? <span>{session.content}</span> : null}{session.feelings ? <em>{session.feelings}</em> : null}{session.attachments?.length ? <div className="daily-session-images">{session.attachments.map((image) => <img key={image.id} src={image.data} alt={image.caption || '\u672c\u6b21\u56fe\u7247'} />)}</div> : null}</div>)}</div>;
+  return (
+    <div className="daily-session-summary">
+      <h5>{'\u5f53\u5929\u65f6\u95f4\u8bb0\u5f55'}</h5>
+      {sessions.map((session) => (
+        <div className="daily-session-card" key={session.id}>
+          <div className="daily-session-card-head">
+            <strong>{session.projectNameSnapshot}</strong>
+            <span>{formatTimeOnly(session.startTime)} - {formatTimeOnly(session.endTime)} / {formatDuration(session.durationMinutes)}</span>
+          </div>
+          <div className="daily-session-meta">{getCategoryPath(session)} / {session.source === 'timer' ? '\u8ba1\u65f6\u8bb0\u5f55' : '\u624b\u52a8\u8bb0\u5f55'}</div>
+          <div className="daily-session-field"><b>{'\u505a\u4e86\u4ec0\u4e48\uff1a'}</b><span>{session.content || '\u672a\u586b\u5199'}</span></div>
+          <div className="daily-session-field"><b>{'\u4e8b\u540e\u611f\u53d7\uff1a'}</b><span>{session.feelings || '\u672a\u586b\u5199'}</span></div>
+          {(typeof session.moodScore === 'number' || typeof session.energyScore === 'number') ? (
+            <div className="daily-session-meta">
+              {typeof session.moodScore === 'number' ? '\u5fc3\u60c5 ' + session.moodScore + '/5' : ''}
+              {typeof session.moodScore === 'number' && typeof session.energyScore === 'number' ? ' / ' : ''}
+              {typeof session.energyScore === 'number' ? '\u7cbe\u529b ' + session.energyScore + '/5' : ''}
+            </div>
+          ) : null}
+          {session.attachments?.length ? <div className="daily-session-images">{session.attachments.map((image) => <img key={image.id} src={image.data} alt={image.caption || '\u672c\u6b21\u56fe\u7247'} />)}</div> : null}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function escapeHtml(value: string) {
@@ -836,7 +859,7 @@ function stripSessionJournalBlocks(html: string) {
 
       if (!(child instanceof HTMLElement)) return;
       if (child.matches('h5, .journal-session-scores, .journal-session-images')) return;
-      if (child.querySelector('strong')?.textContent?.includes('????')) return;
+      if (child.querySelector('strong')?.textContent?.includes('\u4e8b\u540e\u611f\u53d7')) return;
       if (child.tagName.toLowerCase() === 'p' && !skippedSessionContent) {
         skippedSessionContent = true;
         return;
@@ -846,6 +869,12 @@ function stripSessionJournalBlocks(html: string) {
     keepNodes.forEach((child) => node.parentNode?.insertBefore(child, node));
     node.remove();
   });
+
+  template.content.querySelectorAll('p, div').forEach((node) => {
+    const text = node.textContent?.replace(/\s+/g, '').trim() ?? '';
+    if (text.startsWith('\u4e8b\u540e\u611f\u53d7\uff1a') || /^\u5fc3\u60c5\d+\/5\/?\u7cbe\u529b\d+\/5$/.test(text)) node.remove();
+  });
+
   return template.innerHTML.trim();
 }
 
