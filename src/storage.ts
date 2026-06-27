@@ -1,9 +1,9 @@
-import type { ActiveTimer, Project, ProjectImage, ProjectJournalEntry, Session, WeeklyPlan } from './types';
+import type { ActiveTimer, ExercisePlan, GrowthMetric, GrowthRecord, Project, ProjectImage, ProjectJournalEntry, Session, WeeklyPlan } from './types';
 
-type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'activeTimer';
+type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'exercisePlans' | 'growthMetrics' | 'growthRecords' | 'activeTimer';
 
 const DB_NAME = 'personal-management-system';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -36,6 +36,19 @@ const openDatabase = () => {
       if (!db.objectStoreNames.contains('projectJournalEntries')) {
         const store = db.createObjectStore('projectJournalEntries', { keyPath: 'id' });
         store.createIndex('projectId', 'projectId');
+        store.createIndex('date', 'date');
+      }
+      if (!db.objectStoreNames.contains('exercisePlans')) {
+        const store = db.createObjectStore('exercisePlans', { keyPath: 'id' });
+        store.createIndex('scheduledAt', 'scheduledAt');
+        store.createIndex('projectId', 'projectId');
+      }
+      if (!db.objectStoreNames.contains('growthMetrics')) {
+        db.createObjectStore('growthMetrics', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('growthRecords')) {
+        const store = db.createObjectStore('growthRecords', { keyPath: 'id' });
+        store.createIndex('metricId', 'metricId');
         store.createIndex('date', 'date');
       }
       if (!db.objectStoreNames.contains('activeTimer')) {
@@ -87,6 +100,12 @@ export const storage = {
   saveProjectImage: (image: ProjectImage) => put('projectImages', image),
   getProjectJournalEntries: () => getAll<ProjectJournalEntry>('projectJournalEntries'),
   saveProjectJournalEntry: (entry: ProjectJournalEntry) => put('projectJournalEntries', entry),
+  getExercisePlans: () => getAll<ExercisePlan>('exercisePlans'),
+  saveExercisePlan: (plan: ExercisePlan) => put('exercisePlans', plan),
+  getGrowthMetrics: () => getAll<GrowthMetric>('growthMetrics'),
+  saveGrowthMetric: (metric: GrowthMetric) => put('growthMetrics', metric),
+  getGrowthRecords: () => getAll<GrowthRecord>('growthRecords'),
+  saveGrowthRecord: (record: GrowthRecord) => put('growthRecords', record),
   getActiveTimer: async () => {
     const timers = await getAll<ActiveTimer>('activeTimer');
     return timers[0] ?? null;

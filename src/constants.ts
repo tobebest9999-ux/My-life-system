@@ -17,7 +17,9 @@ export const subCategoryLabels: Record<MainCategory, Record<string, string>> = {
     other: '其他',
   },
   exercise: {
-    general: '通用',
+    strength: '\u529b\u91cf',
+    cardio: '\u6709\u6c27',
+    other: '\u5176\u4ed6',
   },
   study: {
     general: '通用',
@@ -29,7 +31,7 @@ export const subCategoryLabels: Record<MainCategory, Record<string, string>> = {
 
 export const defaultSubCategory: Record<MainCategory, string> = {
   entertainment: 'game',
-  exercise: 'general',
+  exercise: 'strength',
   study: 'general',
   project: 'general',
 };

@@ -2,6 +2,8 @@ export type MainCategory = 'entertainment' | 'exercise' | 'study' | 'project';
 
 export type EntertainmentSubCategory = 'game' | 'anime' | 'manga' | 'other';
 
+export type ExerciseSubCategory = 'strength' | 'cardio' | 'other';
+
 export type ProjectStatus =
   | 'wishlist'
   | 'planned'
@@ -15,6 +17,8 @@ export type SessionSource = 'timer' | 'manual';
 export type WeeklyPlanStatus = 'active' | 'completed' | 'failed' | 'skipped';
 
 export type PlanTargetType = 'duration' | 'count' | 'completion';
+
+export type ExercisePlanStatus = 'active' | 'done' | 'skipped';
 
 export interface Project {
   id: string;
@@ -51,6 +55,37 @@ export interface Session {
   energyScore?: number;
   moodScore?: number;
   attachments?: SessionAttachment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExercisePlan {
+  id: string;
+  title: string;
+  mainCategory: 'exercise';
+  subCategory: ExerciseSubCategory;
+  projectId?: string;
+  scheduledAt: string;
+  note: string;
+  status: ExercisePlanStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GrowthMetric {
+  id: string;
+  name: string;
+  unit: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GrowthRecord {
+  id: string;
+  metricId: string;
+  date: string;
+  value: number;
+  note: string;
   createdAt: string;
   updatedAt: string;
 }

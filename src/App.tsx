@@ -12,6 +12,10 @@ import {
 import { storage } from './storage';
 import type {
   ActiveTimer,
+  ExercisePlan,
+  ExerciseSubCategory,
+  GrowthMetric,
+  GrowthRecord,
   MainCategory,
   PlanTargetType,
   Project,
@@ -164,6 +168,9 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [weeklyPlans, setWeeklyPlans] = useState<WeeklyPlan[]>([]);
+  const [exercisePlans, setExercisePlans] = useState<ExercisePlan[]>([]);
+  const [growthMetrics, setGrowthMetrics] = useState<GrowthMetric[]>([]);
+  const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>([]);
   const [images, setImages] = useState<ProjectImage[]>([]);
   const [journalEntries, setJournalEntries] = useState<ProjectJournalEntry[]>([]);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
@@ -173,12 +180,15 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   const reload = async () => {
-    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedTimer] = await Promise.all([
+    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedExercisePlans, storedGrowthMetrics, storedGrowthRecords, storedTimer] = await Promise.all([
       storage.getProjects(),
       storage.getSessions(),
       storage.getWeeklyPlans(),
       storage.getProjectImages(),
       storage.getProjectJournalEntries(),
+      storage.getExercisePlans(),
+      storage.getGrowthMetrics(),
+      storage.getGrowthRecords(),
       storage.getActiveTimer(),
     ]);
     setProjects(sortByCreated(storedProjects));
@@ -186,6 +196,9 @@ function App() {
     setWeeklyPlans(sortByCreated(storedPlans));
     setImages(storedImages);
     setJournalEntries(storedJournalEntries);
+    setExercisePlans(sortByCreated(storedExercisePlans));
+    setGrowthMetrics(sortByCreated(storedGrowthMetrics));
+    setGrowthRecords(sortByCreated(storedGrowthRecords));
     setActiveTimer(storedTimer);
     setLoading(false);
   };
@@ -291,6 +304,21 @@ function App() {
     await reload();
   };
 
+  const saveExercisePlan = async (plan: ExercisePlan) => {
+    await storage.saveExercisePlan({ ...plan, updatedAt: nowIso() });
+    await reload();
+  };
+
+  const saveGrowthMetric = async (metric: GrowthMetric) => {
+    await storage.saveGrowthMetric({ ...metric, updatedAt: nowIso() });
+    await reload();
+  };
+
+  const saveGrowthRecord = async (record: GrowthRecord) => {
+    await storage.saveGrowthRecord({ ...record, updatedAt: nowIso() });
+    await reload();
+  };
+
   const addImage = async (project: Project, data: string, caption?: string) => {
     const image: ProjectImage = { id: createId(), projectId: project.id, data, caption, createdAt: nowIso() };
     await storage.saveProjectImage(image);
@@ -373,7 +401,20 @@ function App() {
           />
         ) : null}
         {!loading && page === 'exercise' ? (
-          <BasicPage title={T.exercise} description={T.exercisePlaceholder} mainCategory="exercise" projects={projects} onCreateProject={createProject} onStartTimer={startTimer} onManualSession={openManual} />
+          <ExercisePage
+            projects={projects}
+            sessions={sessions}
+            exercisePlans={exercisePlans}
+            growthMetrics={growthMetrics}
+            growthRecords={growthRecords}
+            activeTimer={activeTimer}
+            onCreateProject={createProject}
+            onStartTimer={startTimer}
+            onManualSession={openManual}
+            onSaveExercisePlan={saveExercisePlan}
+            onSaveGrowthMetric={saveGrowthMetric}
+            onSaveGrowthRecord={saveGrowthRecord}
+          />
         ) : null}
         {!loading && page === 'study' ? (
           <BasicPage title={T.study} description={T.studyPlaceholder} mainCategory="study" projects={projects} onCreateProject={createProject} onStartTimer={startTimer} onManualSession={openManual} />
@@ -533,7 +574,8 @@ function TimerEndDialog({ timer, onClose, onSave }: { timer: ActiveTimer; onClos
   const [moodScore, setMoodScore] = useState(3);
   const [energyScore, setEnergyScore] = useState(3);
   const [attachments, setAttachments] = useState<SessionAttachment[]>([]);
-  return <Dialog title={T.endTimer} onClose={onClose}><div className="timer-summary"><strong>{timer.projectNameSnapshot}</strong><span>{mainCategoryLabels[timer.mainCategory]} / {getSubCategoryLabel(timer.mainCategory, timer.subCategory)}</span></div><TextArea label={T.whatDone} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} /><div className="form-grid"><NumberField label={T.moodScore} value={moodScore} onChange={setMoodScore} /><NumberField label={T.energyScore} value={energyScore} onChange={setEnergyScore} /></div><DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={() => onSave(content, feelings, moodScore, energyScore, attachments)} /></Dialog>;
+  const contentLabel = timer.mainCategory === 'exercise' ? '\u672c\u6b21\u5b8c\u6210\u76ee\u6807' : T.whatDone;
+  return <Dialog title={T.endTimer} onClose={onClose}><div className="timer-summary"><strong>{timer.projectNameSnapshot}</strong><span>{mainCategoryLabels[timer.mainCategory]} / {getSubCategoryLabel(timer.mainCategory, timer.subCategory)}</span></div><TextArea label={contentLabel} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} /><div className="form-grid"><NumberField label={T.moodScore} value={moodScore} onChange={setMoodScore} /><NumberField label={T.energyScore} value={energyScore} onChange={setEnergyScore} /></div><DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={() => onSave(content, feelings, moodScore, energyScore, attachments)} /></Dialog>;
 }
 
 function ManualSessionDialog({ preset, projects, onClose, onCreateProject, onSave }: {
@@ -554,6 +596,7 @@ function ManualSessionDialog({ preset, projects, onClose, onCreateProject, onSav
   const [attachments, setAttachments] = useState<SessionAttachment[]>([]);
   const [error, setError] = useState('');
   const available = projects.filter((project) => project.mainCategory === mainCategory && project.subCategory === subCategory);
+  const contentLabel = mainCategory === 'exercise' ? '\u672c\u6b21\u5b8c\u6210\u76ee\u6807' : T.whatDone;
   const changeCategory = (value: MainCategory) => { setMainCategory(value); setSubCategory(defaultSubCategory[value]); setProjectId(''); };
   const submit = async () => {
     if (!mainCategory) { setError(T.noCategoryValidation); return; }
@@ -569,7 +612,7 @@ function ManualSessionDialog({ preset, projects, onClose, onCreateProject, onSav
     const timestamp = nowIso();
     await onSave({ id: createId(), mainCategory, subCategory, projectId: project.id, projectNameSnapshot: project.name, source: 'manual', startTime: startIso, endTime: endIso, durationMinutes: minutesBetween(startIso, endIso), content, feelings, attachments, createdAt: timestamp, updatedAt: timestamp });
   };
-  return <Dialog title={T.manualSession} onClose={onClose}><div className="form-grid"><SelectMainCategory value={mainCategory} onChange={changeCategory} /><SelectSubCategory mainCategory={mainCategory} value={subCategory} onChange={setSubCategory} /><label><span>{T.startTime}</span><input type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label><label><span>{T.endTime}</span><input type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label><label className="full-width"><span>{T.project}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{T.selectProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="full-width"><span>{T.createProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={T.projectPlaceholder} /></label></div><TextArea label={T.whatDone} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} />{error ? <p className="error-text">{error}</p> : null}<DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={submit} /></Dialog>;
+  return <Dialog title={T.manualSession} onClose={onClose}><div className="form-grid"><SelectMainCategory value={mainCategory} onChange={changeCategory} /><SelectSubCategory mainCategory={mainCategory} value={subCategory} onChange={setSubCategory} /><label><span>{T.startTime}</span><input type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label><label><span>{T.endTime}</span><input type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label><label className="full-width"><span>{T.project}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{T.selectProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="full-width"><span>{T.createProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={T.projectPlaceholder} /></label></div><TextArea label={contentLabel} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} />{error ? <p className="error-text">{error}</p> : null}<DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={submit} /></Dialog>;
 }
 
 function WeeklyPlanPanel({ projects, plans, onSavePlan }: { projects: Project[]; plans: WeeklyPlan[]; onSavePlan: (plan: WeeklyPlan) => Promise<void> }) {
@@ -889,6 +932,328 @@ function formatTimeOnly(value: string) {
 
 function hasMeaningfulJournalContent(html: string) {
   return /<img\b/i.test(html) || html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
+}
+
+
+const exerciseSubCategoryLabels: Record<ExerciseSubCategory, string> = {
+  strength: '\u529b\u91cf',
+  cardio: '\u6709\u6c27',
+  other: '\u5176\u4ed6',
+};
+
+const exerciseSubCategoryOptions: ExerciseSubCategory[] = ['strength', 'cardio', 'other'];
+
+const exerciseUi = {
+  pageTitle: '\u8fd0\u52a8',
+  subtitle: '\u628a\u8bad\u7ec3\u3001\u8ba1\u5212\u548c\u6210\u957f\u8bb0\u5f55\u653e\u5728\u4e00\u4e2a\u9875\u9762\u91cc\uff0c\u5148\u7a33\u7a33\u7528\u8d77\u6765\u3002',
+  projectUnit: '\u4e2a\u9879\u76ee',
+  recordUnit: '\u6b21\u8bb0\u5f55',
+  quickStart: '\u5feb\u901f\u5f00\u59cb\u8fd0\u52a8',
+  distribution: '\u8fd0\u52a8\u65f6\u95f4\u5206\u5e03',
+  projects: '\u8fd0\u52a8\u9879\u76ee',
+  detail: '\u9879\u76ee\u60c5\u51b5',
+  calendar: '\u8fd0\u52a8\u65e5\u5386',
+  plan: '\u8fd0\u52a8\u89c4\u5212',
+  growth: '\u4e2a\u4eba\u6210\u957f',
+  selectProject: '\u9009\u62e9\u9879\u76ee',
+  noProjectOption: '\u5148\u9009\u4e00\u4e2a\u9879\u76ee',
+  newProject: '\u65b0\u5efa\u9879\u76ee',
+  newProjectPlaceholder: '\u4f8b\u5982\uff1a\u63a8\u65e5\u8bad\u7ec3',
+  start: '\u5f00\u59cb\u8fd0\u52a8',
+  create: '\u521b\u5efa',
+  noProject: '\u6682\u65e0\u9879\u76ee',
+  count: '\u603b\u6b21\u6570',
+  totalTime: '\u603b\u65f6\u957f',
+  averageTime: '\u5e73\u5747\u65f6\u957f',
+  latestRecord: '\u6700\u8fd1\u8bb0\u5f55',
+  noSelected: '\u5148\u5728\u5de6\u4fa7\u9009\u62e9\u6216\u521b\u5efa\u4e00\u4e2a\u8fd0\u52a8\u9879\u76ee\u3002',
+  noDetailRecord: '\u8fd8\u6ca1\u6709\u8fd0\u52a8\u8bb0\u5f55',
+  completedGoal: '\u672c\u6b21\u5b8c\u6210\u76ee\u6807',
+  feeling: '\u672c\u6b21\u611f\u89c9',
+  empty: '\u6682\u65e0',
+  previousWeek: '\u4e0a\u4e00\u5468',
+  nextWeek: '\u4e0b\u4e00\u5468',
+  times: '\u6b21',
+  rest: '\u672a\u8fd0\u52a8',
+  dayEmpty: '\u8fd9\u5929\u8fd8\u6ca1\u6709\u8fd0\u52a8\u8bb0\u5f55',
+  noGoal: '\u672a\u586b\u5199\u5b8c\u6210\u76ee\u6807',
+  notificationTitle: '\u8fd0\u52a8\u63d0\u9192',
+  notificationOn: '\u8fd0\u52a8\u63d0\u9192\u5df2\u5f00\u542f',
+  enableNotification: '\u5f00\u542f\u8fd0\u52a8\u63d0\u9192',
+  overduePrefix: '\u6709',
+  overdueSuffix: '\u4e2a\u8fd0\u52a8\u5b89\u6392\u5df2\u5230\u65f6',
+  planPlaceholder: '\u4f8b\u5982\uff1a\u8dd1\u6b65 30 \u5206\u949f',
+  relatedProject: '\u5173\u8054\u9879\u76ee',
+  note: '\u5907\u6ce8',
+  addPlan: '\u65b0\u589e\u5b89\u6392',
+  previousMonth: '\u4e0a\u4e2a\u6708',
+  nextMonth: '\u4e0b\u4e2a\u6708',
+  done: '\u5b8c\u6210',
+  skipped: '\u8df3\u8fc7',
+  metricPlaceholder: '\u4f8b\u5982\uff1a\u5367\u63a8',
+  unitPlaceholder: '\u5355\u4f4d\uff0c\u4f8b\u5982 kg',
+  createMetric: '\u65b0\u5efa\u6210\u957f\u9879',
+  noMetric: '\u6682\u65e0\u6210\u957f\u9879\uff0c\u53ef\u4ee5\u5148\u65b0\u5efa\u4e00\u4e2a\u3002',
+  from: '\u4ece',
+  to: '\u5230',
+  improved: '\u63d0\u5347',
+  value: '\u6570\u503c',
+  addRecord: '\u65b0\u589e\u8bb0\u5f55',
+  noGrowthRecord: '\u6682\u65e0\u8bb0\u5f55',
+  noNote: '\u65e0\u5907\u6ce8',
+  subCategory: '\u7c7b\u578b',
+};
+
+function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growthRecords, activeTimer, onCreateProject, onStartTimer, onManualSession, onSaveExercisePlan, onSaveGrowthMetric, onSaveGrowthRecord }: {
+  projects: Project[];
+  sessions: Session[];
+  exercisePlans: ExercisePlan[];
+  growthMetrics: GrowthMetric[];
+  growthRecords: GrowthRecord[];
+  activeTimer: ActiveTimer | null;
+  onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onStartTimer: (project: Project) => Promise<void>;
+  onManualSession: (preset: ManualPreset) => void;
+  onSaveExercisePlan: (plan: ExercisePlan) => Promise<void>;
+  onSaveGrowthMetric: (metric: GrowthMetric) => Promise<void>;
+  onSaveGrowthRecord: (record: GrowthRecord) => Promise<void>;
+}) {
+  const exerciseProjects = projects.filter((project) => project.mainCategory === 'exercise');
+  const exerciseSessions = sessions.filter((session) => session.mainCategory === 'exercise');
+  const [selectedProjectId, setSelectedProjectId] = useState(exerciseProjects[0]?.id ?? '');
+  const selectedProject = exerciseProjects.find((project) => project.id === selectedProjectId);
+
+  useEffect(() => {
+    if (!selectedProjectId && exerciseProjects[0]) setSelectedProjectId(exerciseProjects[0].id);
+  }, [selectedProjectId, exerciseProjects]);
+
+  return (
+    <div className="exercise-page">
+      <section className="exercise-hero panel">
+        <div>
+          <p className="eyebrow">{T.stage}</p>
+          <h2>{exerciseUi.pageTitle}</h2>
+          <p>{exerciseUi.subtitle}</p>
+        </div>
+        <div className="exercise-hero-stats">
+          <span>{exerciseProjects.length} {exerciseUi.projectUnit}</span>
+          <span>{exerciseSessions.length} {exerciseUi.recordUnit}</span>
+          <span>{formatDuration(exerciseSessions.reduce((sum, session) => sum + session.durationMinutes, 0))}</span>
+        </div>
+      </section>
+
+      <section className="panel exercise-quick-panel">
+        <h2>{exerciseUi.quickStart}</h2>
+        <ExerciseQuickStart projects={exerciseProjects} activeTimer={activeTimer} onStartTimer={onStartTimer} onCreateProject={onCreateProject} />
+      </section>
+
+      <section className="panel exercise-distribution-panel">
+        <h2>{exerciseUi.distribution}</h2>
+        <ExerciseTimeDistribution sessions={exerciseSessions} />
+      </section>
+
+      <section className="panel exercise-projects-panel">
+        <h2>{exerciseUi.projects}</h2>
+        <ExerciseProjectLibrary projects={exerciseProjects} sessions={exerciseSessions} selectedProjectId={selectedProjectId} onSelectProject={setSelectedProjectId} onCreateProject={onCreateProject} onStartTimer={onStartTimer} onManualSession={onManualSession} activeTimer={activeTimer} />
+      </section>
+
+      <section className="panel exercise-detail-panel">
+        <h2>{exerciseUi.detail}</h2>
+        <ExerciseProjectDetail project={selectedProject} sessions={exerciseSessions.filter((session) => session.projectId === selectedProject?.id)} />
+      </section>
+
+      <section className="panel exercise-calendar-panel">
+        <h2>{exerciseUi.calendar}</h2>
+        <ExerciseWeekCalendar sessions={exerciseSessions} onSelectProject={setSelectedProjectId} />
+      </section>
+
+      <section className="panel exercise-plan-panel-wrap">
+        <h2>{exerciseUi.plan}</h2>
+        <ExercisePlanPanel projects={exerciseProjects} plans={exercisePlans} onSavePlan={onSaveExercisePlan} />
+      </section>
+
+      <section className="panel exercise-growth-panel-wrap">
+        <h2>{exerciseUi.growth}</h2>
+        <GrowthPanel metrics={growthMetrics} records={growthRecords} onSaveMetric={onSaveGrowthMetric} onSaveRecord={onSaveGrowthRecord} />
+      </section>
+    </div>
+  );
+}
+
+function ExerciseQuickStart({ projects, activeTimer, onStartTimer, onCreateProject }: { projects: Project[]; activeTimer: ActiveTimer | null; onStartTimer: (project: Project) => Promise<void>; onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project> }) {
+  const [subCategory, setSubCategory] = useState<ExerciseSubCategory>('strength');
+  const [projectId, setProjectId] = useState('');
+  const [newName, setNewName] = useState('');
+  const available = projects.filter((project) => project.subCategory === subCategory);
+  const start = async () => {
+    let project = available.find((item) => item.id === projectId);
+    if (!project && newName.trim()) project = await onCreateProject({ name: newName.trim(), mainCategory: 'exercise', subCategory, status: 'active' });
+    if (!project) return;
+    await onStartTimer(project);
+    setNewName('');
+  };
+  return <div className="exercise-quick-start"><SelectExerciseSubCategory value={subCategory} onChange={(value) => { setSubCategory(value); setProjectId(''); }} /><label><span>{exerciseUi.selectProject}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{exerciseUi.noProjectOption}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label><span>{exerciseUi.newProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={exerciseUi.newProjectPlaceholder} /></label><button className="primary-button" disabled={Boolean(activeTimer)} onClick={start}>{exerciseUi.start}</button></div>;
+}
+
+function ExerciseProjectLibrary({ projects, sessions, selectedProjectId, activeTimer, onSelectProject, onCreateProject, onStartTimer, onManualSession }: {
+  projects: Project[];
+  sessions: Session[];
+  selectedProjectId: string;
+  activeTimer: ActiveTimer | null;
+  onSelectProject: (id: string) => void;
+  onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onStartTimer: (project: Project) => Promise<void>;
+  onManualSession: (preset: ManualPreset) => void;
+}) {
+  return <div className="exercise-project-library">{exerciseSubCategoryOptions.map((category) => <ExerciseProjectSection key={category} category={category} projects={projects.filter((project) => project.subCategory === category)} sessions={sessions} selectedProjectId={selectedProjectId} activeTimer={activeTimer} onSelectProject={onSelectProject} onCreateProject={onCreateProject} onStartTimer={onStartTimer} onManualSession={onManualSession} />)}</div>;
+}
+
+function ExerciseProjectSection({ category, projects, sessions, selectedProjectId, activeTimer, onSelectProject, onCreateProject, onStartTimer, onManualSession }: {
+  category: ExerciseSubCategory;
+  projects: Project[];
+  sessions: Session[];
+  selectedProjectId: string;
+  activeTimer: ActiveTimer | null;
+  onSelectProject: (id: string) => void;
+  onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onStartTimer: (project: Project) => Promise<void>;
+  onManualSession: (preset: ManualPreset) => void;
+}) {
+  const [name, setName] = useState('');
+  const create = async () => {
+    if (!name.trim()) return;
+    const project = await onCreateProject({ name: name.trim(), mainCategory: 'exercise', subCategory: category, status: 'active' });
+    setName('');
+    onSelectProject(project.id);
+  };
+  return <div className="exercise-project-section"><div className="section-heading"><h3>{exerciseSubCategoryLabels[category]}</h3></div><div className="inline-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.newProjectPlaceholder} /><button className="secondary-button compact" onClick={create}>{exerciseUi.create}</button></div>{projects.length === 0 ? <p className="empty-text">{exerciseUi.noProject}</p> : <div className="exercise-project-list">{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = projectSessions.reduce((sum, session) => sum + session.durationMinutes, 0); return <article key={project.id} className={project.id === selectedProjectId ? 'exercise-project-card active' : 'exercise-project-card'} onClick={() => onSelectProject(project.id)}><strong>{project.name}</strong><span>{projectSessions.length} {exerciseUi.times} / {formatDuration(total)}</span><div className="exercise-card-actions"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={(event) => { event.stopPropagation(); void onStartTimer(project); }}>{T.startTimer}</button><button className="secondary-button compact" onClick={(event) => { event.stopPropagation(); onManualSession({ mainCategory: 'exercise', subCategory: category, projectId: project.id }); }}>{T.manualSession}</button></div></article>; })}</div>}</div>;
+}
+
+function ExerciseProjectDetail({ project, sessions }: { project?: Project; sessions: Session[] }) {
+  if (!project) return <p className="empty-text">{exerciseUi.noSelected}</p>;
+  const orderedSessions = [...sessions].sort((a, b) => b.startTime.localeCompare(a.startTime));
+  const total = orderedSessions.reduce((sum, session) => sum + session.durationMinutes, 0);
+  const average = orderedSessions.length > 0 ? Math.round(total / orderedSessions.length) : 0;
+  return <div className="exercise-detail"><div className="exercise-detail-stats"><div><span>{exerciseUi.count}</span><strong>{orderedSessions.length} {exerciseUi.times}</strong></div><div><span>{exerciseUi.totalTime}</span><strong>{formatDuration(total)}</strong></div><div><span>{exerciseUi.averageTime}</span><strong>{formatDuration(average)}</strong></div><div><span>{exerciseUi.latestRecord}</span><strong>{orderedSessions[0] ? formatDateTime(orderedSessions[0].startTime) : exerciseUi.empty}</strong></div></div><h3>{project.name}</h3>{orderedSessions.length === 0 ? <p className="empty-text">{exerciseUi.noDetailRecord}</p> : <div className="exercise-session-list">{orderedSessions.map((session) => <ExerciseSessionCard key={session.id} session={session} />)}</div>}</div>;
+}
+
+function ExerciseSessionCard({ session }: { session: Session }) {
+  return <article className="exercise-session-card"><div className="daily-session-card-head"><strong>{formatDateTime(session.startTime)} - {formatDateTime(session.endTime)}</strong><span>{formatDuration(session.durationMinutes)}</span></div><div className="daily-session-field"><b>{exerciseUi.completedGoal}</b><span>{session.content || exerciseUi.empty}</span></div><div className="daily-session-field"><b>{exerciseUi.feeling}</b><span>{session.feelings || exerciseUi.empty}</span></div>{(typeof session.moodScore === 'number' || typeof session.energyScore === 'number') ? <div className="daily-session-meta">{typeof session.moodScore === 'number' ? T.moodScore + ' ' + session.moodScore + '/5' : ''}{typeof session.moodScore === 'number' && typeof session.energyScore === 'number' ? ' / ' : ''}{typeof session.energyScore === 'number' ? T.energyScore + ' ' + session.energyScore + '/5' : ''}</div> : null}{session.attachments?.length ? <div className="daily-session-images">{session.attachments.map((image) => <img key={image.id} src={image.data} alt={exerciseUi.completedGoal} />)}</div> : null}</article>;
+}
+
+function ExerciseWeekCalendar({ sessions, onSelectProject }: { sessions: Session[]; onSelectProject: (id: string) => void }) {
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
+  const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  const selectedSessions = sessions.filter((session) => toDateKey(new Date(session.startTime)) === selectedDate);
+  return <div className="exercise-calendar"><div className="calendar-toolbar"><button className="secondary-button compact" onClick={() => setWeekStart(addDays(weekStart, -7))}>{exerciseUi.previousWeek}</button><strong>{formatDate(days[0].toISOString())} - {formatDate(days[6].toISOString())}</strong><button className="secondary-button compact" onClick={() => setWeekStart(addDays(weekStart, 7))}>{exerciseUi.nextWeek}</button></div><div className="exercise-week-grid">{days.map((date) => { const key = toDateKey(date); const daySessions = sessions.filter((session) => toDateKey(new Date(session.startTime)) === key); const marker = getExerciseDayMarker(daySessions); return <button key={key} className={'exercise-day ' + marker + (selectedDate === key ? ' selected' : '')} onClick={() => setSelectedDate(key)}><span>{new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(date)}</span><strong>{date.getDate()}</strong><em>{daySessions.length > 0 ? daySessions.length + ' ' + exerciseUi.times : exerciseUi.rest}</em></button>; })}</div><div className="selected-exercise-day"><h3>{selectedDate}</h3>{selectedSessions.length === 0 ? <p className="empty-text">{exerciseUi.dayEmpty}</p> : selectedSessions.map((session) => <button className="exercise-day-record" key={session.id} onClick={() => onSelectProject(session.projectId)}><strong>{session.projectNameSnapshot}</strong><span>{exerciseSubCategoryLabels[session.subCategory as ExerciseSubCategory] ?? session.subCategory} / {formatDuration(session.durationMinutes)}</span><em>{session.content || exerciseUi.noGoal}</em></button>)}</div></div>;
+}
+
+function ExercisePlanPanel({ projects, plans, onSavePlan }: { projects: Project[]; plans: ExercisePlan[]; onSavePlan: (plan: ExercisePlan) => Promise<void> }) {
+  const [title, setTitle] = useState('');
+  const [subCategory, setSubCategory] = useState<ExerciseSubCategory>('strength');
+  const [projectId, setProjectId] = useState('');
+  const [scheduledAt, setScheduledAt] = useState(toInputDateTime());
+  const [note, setNote] = useState('');
+  const [monthCursor, setMonthCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [notificationEnabled, setNotificationEnabled] = useState(() => typeof Notification !== 'undefined' && Notification.permission === 'granted');
+  const [notifiedIds, setNotifiedIds] = useState<string[]>([]);
+  const available = projects.filter((project) => project.subCategory === subCategory);
+  const monthPlans = plans.filter((plan) => { const date = new Date(plan.scheduledAt); return date.getFullYear() === monthCursor.getFullYear() && date.getMonth() === monthCursor.getMonth(); });
+  const duePlans = plans.filter((plan) => plan.status === 'active' && new Date(plan.scheduledAt).getTime() <= Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+      plans.filter((plan) => plan.status === 'active' && new Date(plan.scheduledAt).getTime() <= Date.now()).forEach((plan) => {
+        if (notifiedIds.includes(plan.id)) return;
+        new Notification(exerciseUi.notificationTitle, { body: plan.title + ' / ' + formatDateTime(plan.scheduledAt) });
+        setNotifiedIds((current) => [...current, plan.id]);
+      });
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, [plans, notifiedIds]);
+
+  const requestNotification = async () => {
+    if (typeof Notification === 'undefined') return;
+    const result = await Notification.requestPermission();
+    setNotificationEnabled(result === 'granted');
+  };
+  const create = async () => {
+    if (!title.trim() || !scheduledAt) return;
+    const timestamp = nowIso();
+    await onSavePlan({ id: createId(), title: title.trim(), mainCategory: 'exercise', subCategory, projectId: projectId || undefined, scheduledAt: fromInputDateTime(scheduledAt), note, status: 'active', createdAt: timestamp, updatedAt: timestamp });
+    setTitle(''); setProjectId(''); setNote('');
+  };
+
+  return <div className="exercise-plan-panel"><div className="notification-row">{notificationEnabled ? <span className="status-pill active">{exerciseUi.notificationOn}</span> : <button className="secondary-button compact" onClick={requestNotification}>{exerciseUi.enableNotification}</button>}{duePlans.length > 0 ? <span className="warning-text">{exerciseUi.overduePrefix} {duePlans.length} {exerciseUi.overdueSuffix}</span> : null}</div><div className="exercise-plan-form"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={exerciseUi.planPlaceholder} /><SelectExerciseSubCategory value={subCategory} onChange={(value) => { setSubCategory(value); setProjectId(''); }} /><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{exerciseUi.relatedProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select><input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={exerciseUi.note} /><button className="primary-button" onClick={create}>{exerciseUi.addPlan}</button></div><div className="calendar-toolbar"><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>{exerciseUi.previousMonth}</button><strong>{monthCursor.getFullYear()}{'\u5e74'}{monthCursor.getMonth() + 1}{'\u6708'}</strong><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>{exerciseUi.nextMonth}</button></div><div className="exercise-plan-month">{buildMonthCells(monthCursor).map((date, index) => date ? <div key={toDateKey(date)} className="exercise-plan-day"><strong>{date.getDate()}</strong>{monthPlans.filter((plan) => toDateKey(new Date(plan.scheduledAt)) === toDateKey(date)).map((plan) => <div key={plan.id} className={'exercise-plan-item ' + plan.status}><span>{formatDateTime(plan.scheduledAt)} {plan.title}</span><small>{exerciseSubCategoryLabels[plan.subCategory]}</small>{plan.note ? <small>{plan.note}</small> : null}<div><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'done' })}>{exerciseUi.done}</button><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'skipped' })}>{exerciseUi.skipped}</button></div></div>)}</div> : <div key={'empty-' + index} className="exercise-plan-day empty" />)}</div></div>;
+}
+
+function GrowthPanel({ metrics, records, onSaveMetric, onSaveRecord }: { metrics: GrowthMetric[]; records: GrowthRecord[]; onSaveMetric: (metric: GrowthMetric) => Promise<void>; onSaveRecord: (record: GrowthRecord) => Promise<void> }) {
+  const [name, setName] = useState('');
+  const [unit, setUnit] = useState('kg');
+  const [selectedMetricId, setSelectedMetricId] = useState(metrics[0]?.id ?? '');
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [value, setValue] = useState('');
+  const [note, setNote] = useState('');
+  useEffect(() => { if (!selectedMetricId && metrics[0]) setSelectedMetricId(metrics[0].id); }, [metrics, selectedMetricId]);
+  const selectedMetric = metrics.find((metric) => metric.id === selectedMetricId);
+  const metricRecords = records.filter((record) => record.metricId === selectedMetricId).sort((a, b) => b.date.localeCompare(a.date));
+  const createMetric = async () => {
+    if (!name.trim() || !unit.trim()) return;
+    const timestamp = nowIso();
+    const metric = { id: createId(), name: name.trim(), unit: unit.trim(), createdAt: timestamp, updatedAt: timestamp };
+    await onSaveMetric(metric);
+    setSelectedMetricId(metric.id); setName('');
+  };
+  const createRecord = async () => {
+    if (!selectedMetric || !date || !value) return;
+    const timestamp = nowIso();
+    await onSaveRecord({ id: createId(), metricId: selectedMetric.id, date, value: Number(value), note, createdAt: timestamp, updatedAt: timestamp });
+    setValue(''); setNote('');
+  };
+  const oldest = [...metricRecords].sort((a, b) => a.date.localeCompare(b.date))[0];
+  const newest = metricRecords[0];
+  return <div className="growth-panel"><div className="growth-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.metricPlaceholder} /><input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder={exerciseUi.unitPlaceholder} /><button className="secondary-button" onClick={createMetric}>{exerciseUi.createMetric}</button></div>{metrics.length === 0 ? <p className="empty-text">{exerciseUi.noMetric}</p> : <div className="growth-grid"><aside className="growth-metrics">{metrics.map((metric) => <button key={metric.id} className={metric.id === selectedMetricId ? 'active' : ''} onClick={() => setSelectedMetricId(metric.id)}>{metric.name}<span>{metric.unit}</span></button>)}</aside><section className="growth-records"><h3>{selectedMetric?.name}</h3>{oldest && newest ? <p className="muted">{exerciseUi.from} {oldest.value}{selectedMetric?.unit} {exerciseUi.to} {newest.value}{selectedMetric?.unit}{'\uff0c'}{exerciseUi.improved} {newest.value - oldest.value}{selectedMetric?.unit}</p> : null}<div className="growth-record-form"><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /><input type="number" value={value} onChange={(event) => setValue(event.target.value)} placeholder={exerciseUi.value} /><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={exerciseUi.note} /><button className="primary-button" onClick={createRecord}>{exerciseUi.addRecord}</button></div>{metricRecords.length === 0 ? <p className="empty-text">{exerciseUi.noGrowthRecord}</p> : <div className="growth-record-list">{metricRecords.map((record) => <div key={record.id}><strong>{record.date}</strong><span>{record.value}{selectedMetric?.unit}</span><em>{record.note || exerciseUi.noNote}</em></div>)}</div>}</section></div>}</div>;
+}
+
+function ExerciseTimeDistribution({ sessions }: { sessions: Session[] }) {
+  const totals = exerciseSubCategoryOptions.reduce((acc, category) => ({ ...acc, [category]: 0 }), {} as Record<ExerciseSubCategory, number>);
+  sessions.forEach((session) => { const key = session.subCategory as ExerciseSubCategory; if (key in totals) totals[key] += session.durationMinutes; });
+  const total = Object.values(totals).reduce((sum, value) => sum + value, 0);
+  return <div className="exercise-distribution">{exerciseSubCategoryOptions.map((category) => { const minutes = totals[category]; const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; return <div className="exercise-progress-row" key={category}><span>{exerciseSubCategoryLabels[category]}</span><div className="exercise-progress"><div className={category} style={{ width: percent + '%' }} /></div><strong>{formatDuration(minutes)} / {percent}%</strong></div>; })}</div>;
+}
+
+function SelectExerciseSubCategory({ value, onChange }: { value: ExerciseSubCategory; onChange: (value: ExerciseSubCategory) => void }) {
+  return <label><span>{exerciseUi.subCategory}</span><select value={value} onChange={(event) => onChange(event.target.value as ExerciseSubCategory)}>{exerciseSubCategoryOptions.map((category) => <option key={category} value={category}>{exerciseSubCategoryLabels[category]}</option>)}</select></label>;
+}
+
+function startOfWeek(date: Date) {
+  const result = new Date(date);
+  const day = result.getDay() || 7;
+  result.setHours(0, 0, 0, 0);
+  result.setDate(result.getDate() - day + 1);
+  return result;
+}
+
+function addDays(date: Date, days: number) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function getExerciseDayMarker(sessions: Session[]) {
+  if (sessions.length === 0) return 'none';
+  const types = new Set(sessions.map((session) => session.subCategory));
+  if (types.size > 1) return 'mixed';
+  return Array.from(types)[0] || 'none';
+}
+
+function buildMonthCells(monthCursor: Date) {
+  const first = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+  const offset = first.getDay();
+  const days = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0).getDate();
+  return [...Array(offset).fill(null), ...Array.from({ length: days }, (_, index) => new Date(monthCursor.getFullYear(), monthCursor.getMonth(), index + 1))] as (Date | null)[];
 }
 
 function BasicPage({ title, description, mainCategory, projects, onCreateProject, onStartTimer, onManualSession }: {
