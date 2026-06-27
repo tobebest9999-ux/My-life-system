@@ -52,6 +52,7 @@ export interface Session {
   durationMinutes: number;
   content: string;
   feelings: string;
+  supplement?: string;
   energyScore?: number;
   moodScore?: number;
   attachments?: SessionAttachment[];

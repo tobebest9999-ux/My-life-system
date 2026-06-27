@@ -471,6 +471,7 @@ function App() {
             onSaveGrowthMetric={saveGrowthMetric}
             onDeleteGrowthMetric={deleteGrowthMetric}
             onSaveGrowthRecord={saveGrowthRecord}
+            onSaveSession={saveSession}
           />
         ) : null}
         {!loading && page === 'study' ? (
@@ -1065,7 +1066,7 @@ const exerciseUi = {
   subCategory: '\u7c7b\u578b',
 };
 
-function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growthRecords, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveExercisePlan, onSaveGrowthMetric, onDeleteGrowthMetric, onSaveGrowthRecord }: {
+function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growthRecords, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveExercisePlan, onSaveGrowthMetric, onDeleteGrowthMetric, onSaveGrowthRecord, onSaveSession }: {
   projects: Project[];
   sessions: Session[];
   exercisePlans: ExercisePlan[];
@@ -1080,6 +1081,7 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
   onSaveGrowthMetric: (metric: GrowthMetric) => Promise<void>;
   onDeleteGrowthMetric: (metric: GrowthMetric) => Promise<void>;
   onSaveGrowthRecord: (record: GrowthRecord) => Promise<void>;
+  onSaveSession: (session: Session) => Promise<void>;
 }) {
   const exerciseProjects = projects.filter((project) => project.mainCategory === 'exercise');
   const exerciseSessions = sessions.filter((session) => session.mainCategory === 'exercise');
@@ -1105,7 +1107,7 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
   }, [selectedProjectId, exerciseProjects, view]);
 
   if (view === 'project' && selectedProject) {
-    return <ExerciseProjectPage project={selectedProject} sessions={exerciseSessions.filter((session) => session.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onDeleteProject={deleteAndLeaveProject} onStartTimer={onStartTimer} onManualSession={onManualSession} />;
+    return <ExerciseProjectPage project={selectedProject} sessions={exerciseSessions.filter((session) => session.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onDeleteProject={deleteAndLeaveProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onSaveSession={onSaveSession} />;
   }
 
   if (view === 'category') {
@@ -1175,8 +1177,8 @@ function ExerciseCategoryBoard({ category, projects, sessions, activeTimer, onBa
   return <div className="notion-page exercise-category-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{exerciseUi.pageTitle} / {exerciseSubCategoryLabels[category]}</div><h2>{exerciseSubCategoryLabels[category]}</h2><p>{'\u8fd9\u91cc\u53ea\u653e\u8fd9\u4e2a\u8fd0\u52a8\u7c7b\u578b\u4e0b\u7684\u9879\u76ee\uff0c\u70b9\u51fb\u9879\u76ee\u8fdb\u5165\u8be6\u60c5\u9875\u3002'}</p></section><section className="panel exercise-projects-panel category-projects-panel"><ExerciseProjectLibrary projects={projects} sessions={sessions} selectedProjectId="" activeTimer={activeTimer} onOpenProject={onOpenProject} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} singleCategory={category} /></section></div>;
 }
 
-function ExerciseProjectPage({ project, sessions, activeTimer, onBack, onDeleteProject, onStartTimer, onManualSession }: { project: Project; sessions: Session[]; activeTimer: ActiveTimer | null; onBack: () => void; onDeleteProject: (project: Project) => Promise<void>; onStartTimer: (project: Project) => Promise<void>; onManualSession: (preset: ManualPreset) => void }) {
-  return <div className="notion-page exercise-project-page"><section className="notion-doc-title"><div className="notion-title-actions"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><button className="danger-button compact" onClick={() => void onDeleteProject(project)}>{commonUi.delete}</button></div><div className="notion-breadcrumb">{exerciseUi.pageTitle} / {exerciseSubCategoryLabels[project.subCategory as ExerciseSubCategory]} / {project.name}</div><h2>{project.name}</h2></section><section className="notebook-toolbar"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory: 'exercise', subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button></section><section className="panel"><ExerciseProjectDetail project={project} sessions={sessions} /></section></div>;
+function ExerciseProjectPage({ project, sessions, activeTimer, onBack, onDeleteProject, onStartTimer, onManualSession, onSaveSession }: { project: Project; sessions: Session[]; activeTimer: ActiveTimer | null; onBack: () => void; onDeleteProject: (project: Project) => Promise<void>; onStartTimer: (project: Project) => Promise<void>; onManualSession: (preset: ManualPreset) => void; onSaveSession: (session: Session) => Promise<void> }) {
+  return <div className="notion-page exercise-project-page"><section className="notion-doc-title"><div className="notion-title-actions"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><button className="danger-button compact" onClick={() => void onDeleteProject(project)}>{commonUi.delete}</button></div><div className="notion-breadcrumb">{exerciseUi.pageTitle} / {exerciseSubCategoryLabels[project.subCategory as ExerciseSubCategory]} / {project.name}</div><h2>{project.name}</h2></section><section className="notebook-toolbar"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory: 'exercise', subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button></section><section className="panel"><ExerciseProjectDetail project={project} sessions={sessions} onSaveSession={onSaveSession} /></section></div>;
 }
 
 function ExerciseQuickStart({ projects, activeTimer, onStartTimer, onCreateProject }: { projects: Project[]; activeTimer: ActiveTimer | null; onStartTimer: (project: Project) => Promise<void>; onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project> }) {
@@ -1232,16 +1234,23 @@ function ExerciseProjectSection({ category, projects, sessions, selectedProjectI
   return <div className="exercise-project-section"><div className="section-heading"><h3>{exerciseSubCategoryLabels[category]}</h3></div><div className="inline-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={exerciseUi.newProjectPlaceholder} /><button className="secondary-button compact" onClick={create}>{exerciseUi.create}</button></div>{projects.length === 0 ? <p className="empty-text">{exerciseUi.noProject}</p> : <div className="exercise-project-list">{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = projectSessions.reduce((sum, session) => sum + session.durationMinutes, 0); return <article key={project.id} className={project.id === selectedProjectId ? 'exercise-project-card active' : 'exercise-project-card'} onClick={() => onOpenProject(project.id)}><strong>{project.name}</strong><span>{projectSessions.length} {exerciseUi.times} / {formatDuration(total)}</span><div className="exercise-card-actions"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={(event) => { event.stopPropagation(); void onStartTimer(project); }}>{T.startTimer}</button><button className="secondary-button compact" onClick={(event) => { event.stopPropagation(); onManualSession({ mainCategory: 'exercise', subCategory: category, projectId: project.id }); }}>{T.manualSession}</button><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteProject(project); }}>{commonUi.delete}</button></div></article>; })}</div>}</div>;
 }
 
-function ExerciseProjectDetail({ project, sessions }: { project?: Project; sessions: Session[] }) {
+function ExerciseProjectDetail({ project, sessions, onSaveSession }: { project?: Project; sessions: Session[]; onSaveSession: (session: Session) => Promise<void> }) {
   if (!project) return <p className="empty-text">{exerciseUi.noSelected}</p>;
   const orderedSessions = [...sessions].sort((a, b) => b.startTime.localeCompare(a.startTime));
   const total = orderedSessions.reduce((sum, session) => sum + session.durationMinutes, 0);
   const average = orderedSessions.length > 0 ? Math.round(total / orderedSessions.length) : 0;
-  return <div className="exercise-detail"><div className="exercise-detail-stats"><div><span>{exerciseUi.count}</span><strong>{orderedSessions.length} {exerciseUi.times}</strong></div><div><span>{exerciseUi.totalTime}</span><strong>{formatDuration(total)}</strong></div><div><span>{exerciseUi.averageTime}</span><strong>{formatDuration(average)}</strong></div><div><span>{exerciseUi.latestRecord}</span><strong>{orderedSessions[0] ? formatDateTime(orderedSessions[0].startTime) : exerciseUi.empty}</strong></div></div><h3>{project.name}</h3>{orderedSessions.length === 0 ? <p className="empty-text">{exerciseUi.noDetailRecord}</p> : <div className="exercise-session-list">{orderedSessions.map((session) => <ExerciseSessionCard key={session.id} session={session} />)}</div>}</div>;
+  return <div className="exercise-detail"><div className="exercise-detail-stats"><div><span>{exerciseUi.count}</span><strong>{orderedSessions.length} {exerciseUi.times}</strong></div><div><span>{exerciseUi.totalTime}</span><strong>{formatDuration(total)}</strong></div><div><span>{exerciseUi.averageTime}</span><strong>{formatDuration(average)}</strong></div><div><span>{exerciseUi.latestRecord}</span><strong>{orderedSessions[0] ? formatDateTime(orderedSessions[0].startTime) : exerciseUi.empty}</strong></div></div><h3>{project.name}</h3>{orderedSessions.length === 0 ? <p className="empty-text">{exerciseUi.noDetailRecord}</p> : <div className="exercise-session-list">{orderedSessions.map((session) => <ExerciseSessionCard key={session.id} session={session} onSaveSession={onSaveSession} />)}</div>}</div>;
 }
 
-function ExerciseSessionCard({ session }: { session: Session }) {
-  return <article className="exercise-session-card"><div className="daily-session-card-head"><strong>{formatDateTime(session.startTime)} - {formatDateTime(session.endTime)}</strong><span>{formatDuration(session.durationMinutes)}</span></div><div className="daily-session-field"><b>{exerciseUi.completedGoal}</b><span>{session.content || exerciseUi.empty}</span></div><div className="daily-session-field"><b>{exerciseUi.feeling}</b><span>{session.feelings || exerciseUi.empty}</span></div>{(typeof session.moodScore === 'number' || typeof session.energyScore === 'number') ? <div className="daily-session-meta">{typeof session.moodScore === 'number' ? T.moodScore + ' ' + session.moodScore + '/5' : ''}{typeof session.moodScore === 'number' && typeof session.energyScore === 'number' ? ' / ' : ''}{typeof session.energyScore === 'number' ? T.energyScore + ' ' + session.energyScore + '/5' : ''}</div> : null}{session.attachments?.length ? <div className="daily-session-images">{session.attachments.map((image) => <img key={image.id} src={image.data} alt={exerciseUi.completedGoal} />)}</div> : null}</article>;
+function ExerciseSessionCard({ session, onSaveSession }: { session: Session; onSaveSession: (session: Session) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [supplement, setSupplement] = useState(session.supplement ?? '');
+  useEffect(() => { setSupplement(session.supplement ?? ''); }, [session.id, session.supplement]);
+  const saveSupplement = async () => {
+    await onSaveSession({ ...session, supplement: supplement.trim(), updatedAt: nowIso() });
+    setEditing(false);
+  };
+  return <article className="exercise-session-card"><div className="daily-session-card-head"><strong>{formatDateTime(session.startTime)} - {formatDateTime(session.endTime)}</strong><span>{formatDuration(session.durationMinutes)}</span></div><div className="daily-session-field"><b>{exerciseUi.completedGoal}</b><span>{session.content || exerciseUi.empty}</span></div><div className="daily-session-field"><b>{exerciseUi.feeling}</b><span>{session.feelings || exerciseUi.empty}</span></div>{session.supplement ? <div className="daily-session-field"><b>{'\u4e8b\u540e\u8865\u5145'}</b><span>{session.supplement}</span></div> : null}{(typeof session.moodScore === 'number' || typeof session.energyScore === 'number') ? <div className="daily-session-meta">{typeof session.moodScore === 'number' ? T.moodScore + ' ' + session.moodScore + '/5' : ''}{typeof session.moodScore === 'number' && typeof session.energyScore === 'number' ? ' / ' : ''}{typeof session.energyScore === 'number' ? T.energyScore + ' ' + session.energyScore + '/5' : ''}</div> : null}{session.attachments?.length ? <div className="daily-session-images">{session.attachments.map((image) => <img key={image.id} src={image.data} alt={exerciseUi.completedGoal} />)}</div> : null}{editing ? <div className="exercise-supplement-editor"><textarea value={supplement} onChange={(event) => setSupplement(event.target.value)} placeholder={'\u5199\u4e00\u70b9\u4e8b\u540e\u8865\u5145'} rows={3} /><div><button className="primary-button compact" onClick={saveSupplement}>{'\u4fdd\u5b58\u8865\u5145'}</button><button className="ghost-button compact" onClick={() => { setSupplement(session.supplement ?? ''); setEditing(false); }}>{T.cancel}</button></div></div> : <button className="secondary-button compact exercise-supplement-button" onClick={() => setEditing(true)}>{session.supplement ? '\u7f16\u8f91\u8865\u5145' : '\u8865\u5145'}</button>}</article>;
 }
 
 function ExerciseMonthCalendar({ sessions, onOpenProject }: { sessions: Session[]; onOpenProject: (id: string) => void }) {

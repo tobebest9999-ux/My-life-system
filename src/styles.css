@@ -2749,3 +2749,102 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+/* Compact exercise home distribution + calendar row */
+.exercise-home-page .exercise-distribution-panel {
+  grid-column: 1;
+}
+
+.exercise-home-page .exercise-calendar-panel {
+  grid-column: 2;
+}
+
+.exercise-home-page .exercise-month-calendar {
+  gap: 8px;
+}
+
+.exercise-home-page .exercise-month-calendar .calendar-toolbar {
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.exercise-home-page .exercise-month-calendar .calendar-toolbar strong {
+  font-size: 16px;
+}
+
+.exercise-home-page .exercise-month-weekdays,
+.exercise-home-page .exercise-month-grid {
+  gap: 4px;
+}
+
+.exercise-home-page .exercise-month-weekdays span {
+  font-size: 12px;
+}
+
+.exercise-home-page .exercise-month-day,
+.exercise-home-page .exercise-month-empty {
+  min-height: 44px;
+  border-radius: 6px;
+}
+
+.exercise-home-page .exercise-month-day {
+  gap: 2px;
+  padding: 5px 6px;
+}
+
+.exercise-home-page .exercise-month-day strong {
+  font-size: 15px;
+}
+
+.exercise-home-page .exercise-month-day span,
+.exercise-home-page .exercise-month-day em {
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.exercise-home-page .exercise-month-calendar .selected-exercise-day {
+  margin-top: 2px;
+  padding-top: 8px;
+}
+
+.exercise-home-page .exercise-month-calendar .selected-exercise-day h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.exercise-home-page .exercise-month-calendar .exercise-day-record {
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 8px;
+  font-size: 13px;
+}
+
+.exercise-supplement-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #dfe8e3;
+}
+
+.exercise-supplement-editor textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.exercise-supplement-editor > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.exercise-supplement-button {
+  width: fit-content;
+  margin-top: 12px;
+}
+
+@media (max-width: 1180px) {
+  .exercise-home-page .exercise-distribution-panel,
+  .exercise-home-page .exercise-calendar-panel {
+    grid-column: auto;
+  }
+}
