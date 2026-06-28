@@ -3989,3 +3989,79 @@ textarea {
     font-size: 24px;
   }
 }
+
+/* Study distribution height tune */
+.study-distribution-panel {
+  min-height: 790px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.study-distribution-panel > h2 {
+  margin-bottom: 22px !important;
+}
+
+.study-distribution-panel .study-distribution {
+  flex: 1 !important;
+  min-height: 690px !important;
+  align-content: space-between !important;
+  gap: 42px !important;
+}
+
+.study-distribution-panel .study-progress-list {
+  gap: 24px !important;
+}
+
+.study-distribution-panel .study-progress-row {
+  font-size: 21px !important;
+}
+
+.study-distribution-panel .study-progress-row strong {
+  font-size: 24px !important;
+}
+
+.study-distribution-panel .study-progress-row .exercise-progress {
+  height: 18px !important;
+}
+
+.study-distribution-panel .study-pie-summary {
+  grid-template-columns: minmax(250px, 300px) minmax(220px, 1fr) !important;
+  align-items: center !important;
+  gap: 28px !important;
+}
+
+.study-distribution-panel .study-pie-chart {
+  width: 280px !important;
+}
+
+.study-distribution-panel .study-pie-chart span {
+  font-size: 20px !important;
+}
+
+.study-distribution-panel .study-pie-legend {
+  gap: 14px !important;
+}
+
+.study-distribution-panel .study-pie-legend div {
+  font-size: 19px !important;
+}
+
+@media (max-width: 1160px) {
+  .study-distribution-panel {
+    min-height: 0 !important;
+  }
+
+  .study-distribution-panel .study-distribution {
+    min-height: 0 !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .study-distribution-panel .study-pie-summary {
+    grid-template-columns: 1fr !important;
+  }
+
+  .study-distribution-panel .study-pie-chart {
+    width: min(280px, 100%) !important;
+  }
+}
