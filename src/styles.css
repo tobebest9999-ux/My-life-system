@@ -3831,3 +3831,13 @@ textarea {
     justify-content: flex-start;
   }
 }
+
+.study-notification-message {
+  margin: 8px 0 16px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--primary);
+  border-radius: 6px;
+  background: #eef8f5;
+  color: var(--text);
+  line-height: 1.6;
+}

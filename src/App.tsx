@@ -1663,10 +1663,33 @@ function StudyProjectPage({ project, sessions, chapters, activeTimer, onBack, on
 function StudyChapterTable({ project, chapters, onSaveChapter, onDeleteChapter }: { project: Project; chapters: StudyChapter[]; onSaveChapter: (chapter: StudyChapter) => Promise<void>; onDeleteChapter: (chapter: StudyChapter) => Promise<void> }) {
   const [title, setTitle] = useState('');
   const [notificationEnabled, setNotificationEnabled] = useState(() => typeof Notification !== 'undefined' && Notification.permission === 'granted');
+  const [notificationMessage, setNotificationMessage] = useState('');
   const ordered = [...chapters].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const create = async () => { if (!title.trim()) return; const timestamp = nowIso(); await onSaveChapter({ id: createId(), projectId: project.id, title: title.trim(), status: 'notStarted', createdAt: timestamp, updatedAt: timestamp }); setTitle(''); };
-  const requestNotification = async () => { if (typeof Notification === 'undefined') return; const result = await Notification.requestPermission(); setNotificationEnabled(result === 'granted'); };
-  return <div className="study-chapter-table"><div className="section-heading"><h3>{studyUi.hierarchy}</h3>{notificationEnabled ? <span className="status-pill active">{studyUi.reminderOn}</span> : <button className="secondary-button compact" onClick={requestNotification}>{studyUi.enableStudyReminder}</button>}</div><div className="inline-create"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={studyUi.chapterPlaceholder} /><button className="secondary-button compact" onClick={create}>{studyUi.addChapter}</button></div>{ordered.length === 0 ? <p className="empty-text">{studyUi.noChapters}</p> : <div className="study-chapter-list">{ordered.map((chapter) => <StudyChapterRow key={chapter.id} chapter={chapter} project={project} onSaveChapter={onSaveChapter} onDeleteChapter={onDeleteChapter} />)}</div>}</div>;
+  const requestNotification = async () => {
+    if (typeof Notification === 'undefined') {
+      setNotificationMessage('\u5f53\u524d\u6d4f\u89c8\u5668\u4e0d\u652f\u6301\u7cfb\u7edf\u901a\u77e5\uff0c\u4f46\u4ecd\u7136\u53ef\u4ee5\u7ed9\u7ae0\u8282\u8bbe\u7f6e\u590d\u4e60\u65f6\u95f4\u3002');
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      setNotificationEnabled(true);
+      setNotificationMessage('\u5b66\u4e60\u63d0\u9192\u5df2\u5f00\u542f\uff0c\u5230\u70b9\u65f6\u5982\u679c\u9875\u9762\u6253\u5f00\u4f1a\u5f39\u51fa\u901a\u77e5\u3002');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      setNotificationMessage('\u6d4f\u89c8\u5668\u5df2\u7981\u6b62\u901a\u77e5\uff0c\u8bf7\u5728\u5730\u5740\u680f\u7684\u6743\u9650\u8bbe\u7f6e\u91cc\u5141\u8bb8\u901a\u77e5\u3002');
+      return;
+    }
+    try {
+      const result = await Notification.requestPermission();
+      const allowed = result === 'granted';
+      setNotificationEnabled(allowed);
+      setNotificationMessage(allowed ? '\u5b66\u4e60\u63d0\u9192\u5df2\u5f00\u542f\uff0c\u73b0\u5728\u53ef\u4ee5\u5728\u7ae0\u8282\u7684\u590d\u4e60\u63d0\u9192\u91cc\u8bbe\u7f6e\u5177\u4f53\u65f6\u95f4\u3002' : '\u4f60\u6ca1\u6709\u5141\u8bb8\u901a\u77e5\uff0c\u4f46\u4ecd\u7136\u53ef\u4ee5\u4fdd\u5b58\u590d\u4e60\u65f6\u95f4\uff0c\u53ea\u662f\u4e0d\u4f1a\u5f39\u51fa\u7cfb\u7edf\u901a\u77e5\u3002');
+    } catch {
+      setNotificationMessage('\u65e0\u6cd5\u5f39\u51fa\u901a\u77e5\u6388\u6743\uff0c\u53ef\u80fd\u88ab\u6d4f\u89c8\u5668\u62e6\u622a\u3002\u4f60\u4ecd\u7136\u53ef\u4ee5\u5148\u8bbe\u7f6e\u590d\u4e60\u65f6\u95f4\u3002');
+    }
+  };
+  return <div className="study-chapter-table"><div className="section-heading"><h3>{studyUi.hierarchy}</h3>{notificationEnabled ? <span className="status-pill active">{studyUi.reminderOn}</span> : <button className="secondary-button compact" onClick={requestNotification}>{studyUi.enableStudyReminder}</button>}</div>{notificationMessage ? <p className="study-notification-message">{notificationMessage}</p> : null}<div className="inline-create"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={studyUi.chapterPlaceholder} /><button className="secondary-button compact" onClick={create}>{studyUi.addChapter}</button></div>{ordered.length === 0 ? <p className="empty-text">{studyUi.noChapters}</p> : <div className="study-chapter-list">{ordered.map((chapter) => <StudyChapterRow key={chapter.id} chapter={chapter} project={project} onSaveChapter={onSaveChapter} onDeleteChapter={onDeleteChapter} />)}</div>}</div>;
 }
 
 function StudyChapterRow({ chapter, project, onSaveChapter, onDeleteChapter }: { chapter: StudyChapter; project: Project; onSaveChapter: (chapter: StudyChapter) => Promise<void>; onDeleteChapter: (chapter: StudyChapter) => Promise<void> }) {
