@@ -168,6 +168,8 @@ const commonUi = {
   confirmDeleteProjectEnd: '\u300d\u5417\uff1f\u5386\u53f2\u65f6\u95f4\u8bb0\u5f55\u4f1a\u4fdd\u7559\uff0c\u4f46\u9879\u76ee\u8d44\u6599\u3001\u56fe\u7247\u3001\u65e5\u8bb0\u548c\u5173\u8054\u8ba1\u5212\u4f1a\u5220\u9664\u3002',
   confirmDeleteMetricStart: '\u786e\u5b9a\u5220\u9664\u6210\u957f\u9879\u300c',
   confirmDeleteMetricEnd: '\u300d\u5417\uff1f\u8fd9\u4e2a\u6210\u957f\u9879\u4e0b\u9762\u7684\u8bb0\u5f55\u4e5f\u4f1a\u4e00\u8d77\u5220\u9664\u3002',
+  confirmDeleteGrowthRecord: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u6210\u957f\u8bb0\u5f55\u5417\uff1f',
+  noExerciseData: '\u6682\u65e0\u8fd0\u52a8\u8bb0\u5f55',
 };
 
 function sortByCreated<TItem extends { createdAt: string }>(items: TItem[]) {
@@ -374,7 +376,7 @@ function App() {
   };
 
   const deleteGrowthRecord = async (record: GrowthRecord) => {
-    const confirmed = window.confirm('????????????');
+    const confirmed = window.confirm(commonUi.confirmDeleteGrowthRecord);
     if (!confirmed) return;
     await storage.deleteGrowthRecord(record.id);
     await reload();
@@ -1342,7 +1344,17 @@ function ExerciseTimeDistribution({ sessions }: { sessions: Session[] }) {
   const totals = exerciseSubCategoryOptions.reduce((acc, category) => ({ ...acc, [category]: 0 }), {} as Record<ExerciseSubCategory, number>);
   sessions.forEach((session) => { const key = session.subCategory as ExerciseSubCategory; if (key in totals) totals[key] += session.durationMinutes; });
   const total = Object.values(totals).reduce((sum, value) => sum + value, 0);
-  return <div className="exercise-distribution">{exerciseSubCategoryOptions.map((category) => { const minutes = totals[category]; const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; return <div className="exercise-progress-row" key={category}><span>{exerciseSubCategoryLabels[category]}</span><div className="exercise-progress"><div className={category} style={{ width: percent + '%' }} /></div><strong>{formatDuration(minutes)} / {percent}%</strong></div>; })}</div>;
+  const colors: Record<ExerciseSubCategory, string> = { strength: '#c94c4c', cardio: '#3977c9', other: '#3b9b60' };
+  let cursor = 0;
+  const pieSegments = exerciseSubCategoryOptions.map((category) => {
+    const value = totals[category];
+    if (value <= 0 || total <= 0) return '';
+    const start = cursor;
+    const end = cursor + (value / total) * 100;
+    cursor = end;
+    return colors[category] + ' ' + start + '% ' + end + '%';
+  }).filter(Boolean).join(', ');
+  return <div className="exercise-distribution"><div className="exercise-progress-list">{exerciseSubCategoryOptions.map((category) => { const minutes = totals[category]; const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; return <div className="exercise-progress-row" key={category}><span>{exerciseSubCategoryLabels[category]}</span><div className="exercise-progress"><div className={category} style={{ width: percent + '%' }} /></div><strong>{formatDuration(minutes)} / {percent}%</strong></div>; })}</div><div className="exercise-pie-summary"><div className="exercise-pie-chart" style={{ background: total > 0 ? 'conic-gradient(' + pieSegments + ')' : '#e8efeb' }}><span>{total > 0 ? formatDuration(total) : '0\u5206\u949f'}</span></div><div className="exercise-pie-legend">{exerciseSubCategoryOptions.map((category) => <div key={category}><i style={{ background: colors[category] }} /><span>{exerciseSubCategoryLabels[category]}</span><strong>{formatDuration(totals[category])}</strong></div>)}</div>{total === 0 ? <p className="empty-text">{commonUi.noExerciseData}</p> : null}</div></div>;
 }
 
 function SelectExerciseSubCategory({ value, onChange }: { value: ExerciseSubCategory; onChange: (value: ExerciseSubCategory) => void }) {
