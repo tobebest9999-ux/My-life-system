@@ -3,7 +3,7 @@ import type { MainCategory, ProjectStatus } from './types';
 export const mainCategoryLabels: Record<MainCategory, string> = {
   entertainment: '娱乐',
   exercise: '运动',
-  study: '学习',
+  study: '\u5b66\u4e60',
   project: '项目',
 };
 
@@ -22,7 +22,10 @@ export const subCategoryLabels: Record<MainCategory, Record<string, string>> = {
     other: '\u5176\u4ed6',
   },
   study: {
-    general: '通用',
+    computer: '\u8ba1\u7b97\u673a',
+    math: '\u6570\u5b66',
+    english: '\u82f1\u8bed',
+    other: '\u5176\u4ed6',
   },
   project: {
     general: '通用',
@@ -32,7 +35,7 @@ export const subCategoryLabels: Record<MainCategory, Record<string, string>> = {
 export const defaultSubCategory: Record<MainCategory, string> = {
   entertainment: 'game',
   exercise: 'strength',
-  study: 'general',
+  study: 'computer',
   project: 'general',
 };
 

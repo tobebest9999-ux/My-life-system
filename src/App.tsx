@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type ReactNode } from 'react';
 import {
   defaultSubCategory,
   mainCategoryLabels,
@@ -14,6 +14,10 @@ import type {
   ActiveTimer,
   ExercisePlan,
   ExerciseSubCategory,
+  StudyChapter,
+  StudyLibraryItem,
+  StudyLibraryType,
+  StudySubCategory,
   GrowthMetric,
   GrowthRecord,
   MainCategory,
@@ -172,6 +176,8 @@ const commonUi = {
   confirmDeleteGrowthRecord: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u6210\u957f\u8bb0\u5f55\u5417\uff1f',
   confirmDeleteReminder: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u63d0\u9192\u5417\uff1f',
   confirmDeleteWeeklyPlan: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u5468\u8ba1\u5212\u5417\uff1f',
+  confirmDeleteStudyChapter: '\u786e\u5b9a\u5220\u9664\u8fd9\u4e2a\u77e5\u8bc6\u7ae0\u8282\u5417\uff1f',
+  confirmDeleteStudyLibraryItem: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u5185\u5bb9\u5417\uff1f',
   noExerciseData: '\u6682\u65e0\u8fd0\u52a8\u8bb0\u5f55',
 };
 
@@ -201,6 +207,8 @@ function App() {
   const [exercisePlans, setExercisePlans] = useState<ExercisePlan[]>([]);
   const [growthMetrics, setGrowthMetrics] = useState<GrowthMetric[]>([]);
   const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>([]);
+  const [studyChapters, setStudyChapters] = useState<StudyChapter[]>([]);
+  const [studyLibraryItems, setStudyLibraryItems] = useState<StudyLibraryItem[]>([]);
   const [images, setImages] = useState<ProjectImage[]>([]);
   const [journalEntries, setJournalEntries] = useState<ProjectJournalEntry[]>([]);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
@@ -210,7 +218,7 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   const reload = async () => {
-    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedProjectReminders, storedExercisePlans, storedGrowthMetrics, storedGrowthRecords, storedTimer] = await Promise.all([
+    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedProjectReminders, storedExercisePlans, storedGrowthMetrics, storedGrowthRecords, storedStudyChapters, storedStudyLibraryItems, storedTimer] = await Promise.all([
       storage.getProjects(),
       storage.getSessions(),
       storage.getWeeklyPlans(),
@@ -220,6 +228,8 @@ function App() {
       storage.getExercisePlans(),
       storage.getGrowthMetrics(),
       storage.getGrowthRecords(),
+      storage.getStudyChapters(),
+      storage.getStudyLibraryItems(),
       storage.getActiveTimer(),
     ]);
     setProjects(sortByCreated(storedProjects));
@@ -231,6 +241,8 @@ function App() {
     setExercisePlans(sortByCreated(storedExercisePlans));
     setGrowthMetrics(sortByCreated(storedGrowthMetrics));
     setGrowthRecords(sortByCreated(storedGrowthRecords));
+    setStudyChapters(sortByCreated(storedStudyChapters));
+    setStudyLibraryItems(sortByCreated(storedStudyLibraryItems));
     setActiveTimer(storedTimer);
     setLoading(false);
   };
@@ -310,6 +322,8 @@ function App() {
       ...weeklyPlans.filter((plan) => plan.projectId === project.id).map((plan) => storage.deleteWeeklyPlan(plan.id)),
       ...projectReminders.filter((reminder) => reminder.projectId === project.id).map((reminder) => storage.deleteProjectReminder(reminder.id)),
       ...exercisePlans.filter((plan) => plan.projectId === project.id).map((plan) => storage.deleteExercisePlan(plan.id)),
+      ...studyChapters.filter((chapter) => chapter.projectId === project.id).map((chapter) => storage.deleteStudyChapter(chapter.id)),
+      ...studyLibraryItems.filter((item) => item.projectId === project.id).map((item) => storage.deleteStudyLibraryItem(item.id)),
     ]);
     await storage.deleteProject(project.id);
     await reload();
@@ -346,7 +360,7 @@ function App() {
     await reload();
   };
 
-  const finishTimer = async (content: string, feelings: string, moodScore?: number, energyScore?: number, attachments: SessionAttachment[] = []) => {
+  const finishTimer = async (content: string, feelings: string, moodScore?: number, energyScore?: number, attachments: SessionAttachment[] = [], chapterIds: string[] = []) => {
     if (!activeTimer) return;
     const endTime = nowIso();
     const timestamp = nowIso();
@@ -365,6 +379,7 @@ function App() {
       moodScore,
       energyScore,
       attachments,
+      chapterIds: chapterIds.length > 0 ? chapterIds : undefined,
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -417,6 +432,30 @@ function App() {
 
   const saveGrowthRecord = async (record: GrowthRecord) => {
     await storage.saveGrowthRecord({ ...record, updatedAt: nowIso() });
+    await reload();
+  };
+
+  const saveStudyChapter = async (chapter: StudyChapter) => {
+    await storage.saveStudyChapter({ ...chapter, updatedAt: nowIso() });
+    await reload();
+  };
+
+  const deleteStudyChapter = async (chapter: StudyChapter) => {
+    const confirmed = window.confirm(commonUi.confirmDeleteStudyChapter);
+    if (!confirmed) return;
+    await storage.deleteStudyChapter(chapter.id);
+    await reload();
+  };
+
+  const saveStudyLibraryItem = async (item: StudyLibraryItem) => {
+    await storage.saveStudyLibraryItem({ ...item, updatedAt: nowIso() });
+    await reload();
+  };
+
+  const deleteStudyLibraryItem = async (item: StudyLibraryItem) => {
+    const confirmed = window.confirm(commonUi.confirmDeleteStudyLibraryItem);
+    if (!confirmed) return;
+    await storage.deleteStudyLibraryItem(item.id);
     await reload();
   };
 
@@ -535,7 +574,21 @@ function App() {
           />
         ) : null}
         {!loading && page === 'study' ? (
-          <BasicPage title={T.study} description={T.studyPlaceholder} mainCategory="study" projects={projects} onCreateProject={createProject} onDeleteProject={deleteProject} onStartTimer={startTimer} onManualSession={openManual} />
+          <StudyPage
+            projects={projects}
+            sessions={sessions}
+            studyChapters={studyChapters}
+            studyLibraryItems={studyLibraryItems}
+            activeTimer={activeTimer}
+            onCreateProject={createProject}
+            onDeleteProject={deleteProject}
+            onStartTimer={startTimer}
+            onManualSession={openManual}
+            onSaveChapter={saveStudyChapter}
+            onDeleteChapter={deleteStudyChapter}
+            onSaveLibraryItem={saveStudyLibraryItem}
+            onDeleteLibraryItem={deleteStudyLibraryItem}
+          />
         ) : null}
         {!loading && page === 'projects' ? (
           <BasicPage title={T.projects} description={T.projectPlaceholderPage} mainCategory="project" projects={projects} onCreateProject={createProject} onDeleteProject={deleteProject} onStartTimer={startTimer} onManualSession={openManual} />
@@ -543,8 +596,8 @@ function App() {
       </main>
 
       {dialog === 'quickStart' ? <QuickStartDialog initialCategory={quickStartCategory} projects={projects} onClose={() => setDialog(null)} onCreateProject={createProject} onStartTimer={startTimer} /> : null}
-      {dialog === 'endTimer' && activeTimer ? <TimerEndDialog timer={activeTimer} onClose={() => setDialog(null)} onSave={finishTimer} /> : null}
-      {dialog === 'manualSession' ? <ManualSessionDialog preset={manualPreset} projects={projects} onClose={() => setDialog(null)} onCreateProject={createProject} onSave={async (session) => { await saveSession(session); setDialog(null); }} /> : null}
+      {dialog === 'endTimer' && activeTimer ? <TimerEndDialog timer={activeTimer} studyChapters={studyChapters} onClose={() => setDialog(null)} onSave={finishTimer} /> : null}
+      {dialog === 'manualSession' ? <ManualSessionDialog preset={manualPreset} projects={projects} studyChapters={studyChapters} onClose={() => setDialog(null)} onCreateProject={createProject} onSave={async (session) => { await saveSession(session); setDialog(null); }} /> : null}
     </div>
   );
 }
@@ -687,19 +740,22 @@ function QuickStartDialog({ initialCategory, projects, onClose, onCreateProject,
   return <Dialog title={T.quickStart} onClose={onClose}><div className="form-grid"><SelectMainCategory value={mainCategory} onChange={changeCategory} /><SelectSubCategory mainCategory={mainCategory} value={subCategory} onChange={setSubCategory} /><label className="full-width"><span>{T.chooseProject}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{T.selectProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="full-width"><span>{T.createProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={T.projectPlaceholder} /></label></div>{error ? <p className="error-text">{error}</p> : null}<DialogActions onCancel={onClose} actionLabel={T.startTimer} onAction={submit} /></Dialog>;
 }
 
-function TimerEndDialog({ timer, onClose, onSave }: { timer: ActiveTimer; onClose: () => void; onSave: (content: string, feelings: string, moodScore?: number, energyScore?: number, attachments?: SessionAttachment[]) => Promise<void> }) {
+function TimerEndDialog({ timer, studyChapters, onClose, onSave }: { timer: ActiveTimer; studyChapters: StudyChapter[]; onClose: () => void; onSave: (content: string, feelings: string, moodScore?: number, energyScore?: number, attachments?: SessionAttachment[], chapterIds?: string[]) => Promise<void> }) {
   const [content, setContent] = useState('');
   const [feelings, setFeelings] = useState('');
   const [moodScore, setMoodScore] = useState(3);
   const [energyScore, setEnergyScore] = useState(3);
   const [attachments, setAttachments] = useState<SessionAttachment[]>([]);
-  const contentLabel = timer.mainCategory === 'exercise' ? '\u672c\u6b21\u5b8c\u6210\u76ee\u6807' : T.whatDone;
-  return <Dialog title={T.endTimer} onClose={onClose}><div className="timer-summary"><strong>{timer.projectNameSnapshot}</strong><span>{mainCategoryLabels[timer.mainCategory]} / {getSubCategoryLabel(timer.mainCategory, timer.subCategory)}</span></div><TextArea label={contentLabel} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} /><div className="form-grid"><NumberField label={T.moodScore} value={moodScore} onChange={setMoodScore} /><NumberField label={T.energyScore} value={energyScore} onChange={setEnergyScore} /></div><DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={() => onSave(content, feelings, moodScore, energyScore, attachments)} /></Dialog>;
+  const [chapterIds, setChapterIds] = useState<string[]>([]);
+  const contentLabel = timer.mainCategory === 'exercise' ? '\u672c\u6b21\u5b8c\u6210\u76ee\u6807' : timer.mainCategory === 'study' ? '\u672c\u6b21\u5b66\u4e86\u4ec0\u4e48\uff1f' : T.whatDone;
+  const availableChapters = timer.mainCategory === 'study' ? studyChapters.filter((chapter) => chapter.projectId === timer.projectId) : [];
+  return <Dialog title={T.endTimer} onClose={onClose}><div className="timer-summary"><strong>{timer.projectNameSnapshot}</strong><span>{mainCategoryLabels[timer.mainCategory]} / {getSubCategoryLabel(timer.mainCategory, timer.subCategory)}</span></div><TextArea label={contentLabel} value={content} onChange={setContent} />{timer.mainCategory === 'study' ? <StudyChapterSelector chapters={availableChapters} selectedIds={chapterIds} onChange={setChapterIds} /> : null}<TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} /><div className="form-grid"><NumberField label={T.moodScore} value={moodScore} onChange={setMoodScore} /><NumberField label={T.energyScore} value={energyScore} onChange={setEnergyScore} /></div><DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={() => onSave(content, feelings, moodScore, energyScore, attachments, chapterIds)} /></Dialog>;
 }
 
-function ManualSessionDialog({ preset, projects, onClose, onCreateProject, onSave }: {
+function ManualSessionDialog({ preset, projects, studyChapters, onClose, onCreateProject, onSave }: {
   preset: ManualPreset;
   projects: Project[];
+  studyChapters: StudyChapter[];
   onClose: () => void;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
   onSave: (session: Session) => Promise<void>;
@@ -713,10 +769,12 @@ function ManualSessionDialog({ preset, projects, onClose, onCreateProject, onSav
   const [content, setContent] = useState('');
   const [feelings, setFeelings] = useState('');
   const [attachments, setAttachments] = useState<SessionAttachment[]>([]);
+  const [chapterIds, setChapterIds] = useState<string[]>([]);
   const [error, setError] = useState('');
   const available = projects.filter((project) => project.mainCategory === mainCategory && project.subCategory === subCategory);
-  const contentLabel = mainCategory === 'exercise' ? '\u672c\u6b21\u5b8c\u6210\u76ee\u6807' : T.whatDone;
-  const changeCategory = (value: MainCategory) => { setMainCategory(value); setSubCategory(defaultSubCategory[value]); setProjectId(''); };
+  const availableChapters = mainCategory === 'study' && projectId ? studyChapters.filter((chapter) => chapter.projectId === projectId) : [];
+  const contentLabel = mainCategory === 'exercise' ? '\u672c\u6b21\u5b8c\u6210\u76ee\u6807' : mainCategory === 'study' ? '\u672c\u6b21\u5b66\u4e86\u4ec0\u4e48\uff1f' : T.whatDone;
+  const changeCategory = (value: MainCategory) => { setMainCategory(value); setSubCategory(defaultSubCategory[value]); setProjectId(''); setChapterIds([]); };
   const submit = async () => {
     if (!mainCategory) { setError(T.noCategoryValidation); return; }
     if (!subCategory) { setError(T.noSubCategoryValidation); return; }
@@ -729,9 +787,9 @@ function ManualSessionDialog({ preset, projects, onClose, onCreateProject, onSav
     if (!project && newName.trim()) project = await onCreateProject({ name: newName, mainCategory, subCategory, status: 'active' });
     if (!project) { setError(T.noProjectValidation); return; }
     const timestamp = nowIso();
-    await onSave({ id: createId(), mainCategory, subCategory, projectId: project.id, projectNameSnapshot: project.name, source: 'manual', startTime: startIso, endTime: endIso, durationMinutes: minutesBetween(startIso, endIso), content, feelings, attachments, createdAt: timestamp, updatedAt: timestamp });
+    await onSave({ id: createId(), mainCategory, subCategory, projectId: project.id, projectNameSnapshot: project.name, source: 'manual', startTime: startIso, endTime: endIso, durationMinutes: minutesBetween(startIso, endIso), content, feelings, attachments, chapterIds: chapterIds.length > 0 ? chapterIds : undefined, createdAt: timestamp, updatedAt: timestamp });
   };
-  return <Dialog title={T.manualSession} onClose={onClose}><div className="form-grid"><SelectMainCategory value={mainCategory} onChange={changeCategory} /><SelectSubCategory mainCategory={mainCategory} value={subCategory} onChange={setSubCategory} /><label><span>{T.startTime}</span><input type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label><label><span>{T.endTime}</span><input type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label><label className="full-width"><span>{T.project}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{T.selectProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="full-width"><span>{T.createProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={T.projectPlaceholder} /></label></div><TextArea label={contentLabel} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} />{error ? <p className="error-text">{error}</p> : null}<DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={submit} /></Dialog>;
+  return <Dialog title={T.manualSession} onClose={onClose}><div className="form-grid"><SelectMainCategory value={mainCategory} onChange={changeCategory} /><SelectSubCategory mainCategory={mainCategory} value={subCategory} onChange={(value) => { setSubCategory(value); setProjectId(''); setChapterIds([]); }} /><label><span>{T.startTime}</span><input type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label><label><span>{T.endTime}</span><input type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label><label className="full-width"><span>{T.project}</span><select value={projectId} onChange={(event) => { setProjectId(event.target.value); setChapterIds([]); }}><option value="">{T.selectProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="full-width"><span>{T.createProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={T.projectPlaceholder} /></label></div><TextArea label={contentLabel} value={content} onChange={setContent} />{mainCategory === 'study' ? <StudyChapterSelector chapters={availableChapters} selectedIds={chapterIds} onChange={setChapterIds} /> : null}<TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} />{error ? <p className="error-text">{error}</p> : null}<DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={submit} /></Dialog>;
 }
 
 function WeeklyPlanPanel({ projects, plans, onSavePlan, onDeletePlan }: { projects: Project[]; plans: WeeklyPlan[]; onSavePlan: (plan: WeeklyPlan) => Promise<void>; onDeletePlan: (plan: WeeklyPlan) => Promise<void> }) {
@@ -1409,6 +1467,205 @@ function ExerciseTimeDistribution({ sessions }: { sessions: Session[] }) {
     return colors[category] + ' ' + start + '% ' + end + '%';
   }).filter(Boolean).join(', ');
   return <div className="exercise-distribution"><div className="exercise-progress-list">{exerciseSubCategoryOptions.map((category) => { const minutes = totals[category]; const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; return <div className="exercise-progress-row" key={category}><span>{exerciseSubCategoryLabels[category]}</span><div className="exercise-progress"><div className={category} style={{ width: percent + '%' }} /></div><strong>{formatDuration(minutes)} / {percent}%</strong></div>; })}</div><div className="exercise-pie-summary"><div className="exercise-pie-chart" style={{ background: total > 0 ? 'conic-gradient(' + pieSegments + ')' : '#e8efeb' }}><span>{total > 0 ? formatDuration(total) : '0\u5206\u949f'}</span></div><div className="exercise-pie-legend">{exerciseSubCategoryOptions.map((category) => <div key={category}><i style={{ background: colors[category] }} /><span>{exerciseSubCategoryLabels[category]}</span><strong>{formatDuration(totals[category])}</strong></div>)}</div>{total === 0 ? <p className="empty-text">{commonUi.noExerciseData}</p> : null}</div></div>;
+}
+
+const studySubCategoryLabels: Record<StudySubCategory, string> = {
+  computer: '\u8ba1\u7b97\u673a',
+  math: '\u6570\u5b66',
+  english: '\u82f1\u8bed',
+  other: '\u5176\u4ed6',
+};
+
+const studySubCategoryOptions: StudySubCategory[] = ['computer', 'math', 'english', 'other'];
+
+const studyUi = {
+  pageTitle: '\u5b66\u4e60',
+  subtitle: '\u628a\u8ba1\u7b97\u673a\u3001\u6570\u5b66\u3001\u82f1\u8bed\u548c\u5176\u4ed6\u5b66\u4e60\u9879\u76ee\u7edf\u4e00\u6536\u7eb3\uff0c\u8bb0\u5f55\u65f6\u95f4\u3001\u7ae0\u8282\u3001\u9519\u9898\u548c\u7b14\u8bb0\u3002',
+  projects: '\u5b66\u4e60\u9879\u76ee',
+  distribution: '\u5b66\u4e60\u65f6\u95f4\u5206\u5e03',
+  calendar: '\u5b66\u4e60\u65e5\u5386',
+  mistakes: '\u9519\u9898\u5e93',
+  notes: '\u7b14\u8bb0\u5e93',
+  projectUnit: '\u4e2a\u9879\u76ee',
+  recordUnit: '\u6761\u8bb0\u5f55',
+  noProject: '\u6682\u65e0\u9879\u76ee',
+  create: '\u521b\u5efa',
+  newProjectPlaceholder: '\u4f8b\u5982\uff1a\u6570\u636e\u7ed3\u6784',
+  times: '\u6b21',
+  count: '\u603b\u6b21\u6570',
+  totalTime: '\u603b\u65f6\u957f',
+  averageTime: '\u5e73\u5747\u65f6\u957f',
+  latestRecord: '\u6700\u8fd1\u8bb0\u5f55',
+  empty: '\u6682\u65e0',
+  hierarchy: '\u5b66\u4e60\u5c42\u6b21\u8868',
+  chapterPlaceholder: '\u4f8b\u5982\uff1a\u94fe\u8868',
+  addChapter: '\u65b0\u589e\u7ae0\u8282',
+  completed: '\u5df2\u5b66\u5b8c',
+  notStarted: '\u672a\u5b66\u5b8c',
+  relatedChapters: '\u5173\u8054\u77e5\u8bc6\u7ae0\u8282',
+  noChapters: '\u8fd9\u4e2a\u9879\u76ee\u8fd8\u6ca1\u6709\u77e5\u8bc6\u7ae0\u8282',
+  learnedContent: '\u5b66\u4e60\u5185\u5bb9',
+  feeling: '\u672c\u6b21\u611f\u89c9',
+  previousMonth: '\u4e0a\u4e2a\u6708',
+  nextMonth: '\u4e0b\u4e2a\u6708',
+  rest: '\u672a\u5b66\u4e60',
+  dayEmpty: '\u8fd9\u4e00\u5929\u8fd8\u6ca1\u6709\u5b66\u4e60\u8bb0\u5f55',
+  title: '\u6807\u9898',
+  content: '\u5185\u5bb9',
+  imageUrl: '\u56fe\u7247\u7f51\u5740',
+  uploadImage: '\u4e0a\u4f20\u56fe\u7247',
+  saveMistake: '\u4fdd\u5b58\u9519\u9898',
+  saveNote: '\u4fdd\u5b58\u7b14\u8bb0',
+  noLibraryItem: '\u6682\u65e0\u5185\u5bb9',
+};
+
+function StudyPage({ projects, sessions, studyChapters, studyLibraryItems, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveChapter, onDeleteChapter, onSaveLibraryItem, onDeleteLibraryItem }: {
+  projects: Project[];
+  sessions: Session[];
+  studyChapters: StudyChapter[];
+  studyLibraryItems: StudyLibraryItem[];
+  activeTimer: ActiveTimer | null;
+  onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onDeleteProject: (project: Project) => Promise<void>;
+  onStartTimer: (project: Project) => Promise<void>;
+  onManualSession: (preset: ManualPreset) => void;
+  onSaveChapter: (chapter: StudyChapter) => Promise<void>;
+  onDeleteChapter: (chapter: StudyChapter) => Promise<void>;
+  onSaveLibraryItem: (item: StudyLibraryItem) => Promise<void>;
+  onDeleteLibraryItem: (item: StudyLibraryItem) => Promise<void>;
+}) {
+  const studyProjects = projects.filter((project) => project.mainCategory === 'study');
+  const studySessions = sessions.filter((session) => session.mainCategory === 'study');
+  const [view, setView] = useState<'home' | 'category' | 'project'>('home');
+  const [category, setCategory] = useState<StudySubCategory>('computer');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const selectedProject = studyProjects.find((project) => project.id === selectedProjectId);
+  const openCategory = (nextCategory: StudySubCategory) => { setCategory(nextCategory); setSelectedProjectId(''); setView('category'); };
+  const openProject = (projectId: string) => {
+    const project = studyProjects.find((item) => item.id === projectId);
+    if (!project) return;
+    setCategory(project.subCategory as StudySubCategory);
+    setSelectedProjectId(project.id);
+    setView('project');
+  };
+  const deleteAndLeaveProject = async (project: Project) => { await onDeleteProject(project); setSelectedProjectId(''); setView('category'); };
+  useEffect(() => { if (selectedProjectId && !studyProjects.some((project) => project.id === selectedProjectId)) { setSelectedProjectId(''); if (view === 'project') setView('category'); } }, [selectedProjectId, studyProjects, view]);
+  if (view === 'project' && selectedProject) {
+    return <StudyProjectPage project={selectedProject} sessions={studySessions.filter((session) => session.projectId === selectedProject.id)} chapters={studyChapters.filter((chapter) => chapter.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onDeleteProject={deleteAndLeaveProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onSaveChapter={onSaveChapter} onDeleteChapter={onDeleteChapter} />;
+  }
+  if (view === 'category') {
+    return <StudyCategoryBoard category={category} projects={studyProjects.filter((project) => project.subCategory === category)} sessions={studySessions} activeTimer={activeTimer} onBack={() => setView('home')} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onOpenProject={openProject} />;
+  }
+  return <div className="study-page study-home-page"><section className="study-hero panel"><div><p className="eyebrow">{T.stage}</p><h2>{studyUi.pageTitle}</h2><p>{studyUi.subtitle}</p></div><div className="exercise-hero-stats"><span>{studyProjects.length} {studyUi.projectUnit}</span><span>{studySessions.length} {studyUi.recordUnit}</span><span>{formatDuration(studySessions.reduce((sum, session) => sum + session.durationMinutes, 0))}</span></div></section><section className="panel study-category-entry-panel"><h2>{studyUi.projects}</h2><StudyCategoryEntrances projects={studyProjects} sessions={studySessions} onOpenCategory={openCategory} /></section><section className="panel study-distribution-panel"><h2>{studyUi.distribution}</h2><StudyTimeDistribution sessions={studySessions} /></section><section className="panel study-calendar-panel"><h2>{studyUi.calendar}</h2><StudyMonthCalendar sessions={studySessions} projects={studyProjects} chapters={studyChapters} onOpenProject={openProject} /></section><section className="panel study-library-panel-wrap"><StudyLibraryPanel type="mistake" projects={studyProjects} items={studyLibraryItems.filter((item) => item.type === 'mistake')} onSaveItem={onSaveLibraryItem} onDeleteItem={onDeleteLibraryItem} /></section><section className="panel study-library-panel-wrap"><StudyLibraryPanel type="note" projects={studyProjects} items={studyLibraryItems.filter((item) => item.type === 'note')} onSaveItem={onSaveLibraryItem} onDeleteItem={onDeleteLibraryItem} /></section></div>;
+}
+
+function StudyCategoryEntrances({ projects, sessions, onOpenCategory }: { projects: Project[]; sessions: Session[]; onOpenCategory: (category: StudySubCategory) => void }) {
+  const total = sessions.reduce((sum, session) => sum + session.durationMinutes, 0);
+  return <div className="exercise-category-entrances study-category-entrances">{studySubCategoryOptions.map((category) => { const categoryProjects = projects.filter((project) => project.subCategory === category); const categorySessions = sessions.filter((session) => session.subCategory === category); const minutes = categorySessions.reduce((sum, session) => sum + session.durationMinutes, 0); const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; const recent = categoryProjects[0]; return <button key={category} className={'exercise-category-entry study-category-entry ' + category} onClick={() => onOpenCategory(category)}><div><strong>{studySubCategoryLabels[category]}</strong><span>{categoryProjects.length} {'\u4e2a\u9879\u76ee'}</span></div><p>{recent ? '\u6700\u8fd1\uff1a' + recent.name : studyUi.noProject}</p><div className="exercise-progress"><div className={category} style={{ width: percent + '%' }} /></div><footer><span>{formatDuration(minutes)}</span><em>{percent}%</em></footer></button>; })}</div>;
+}
+
+function StudyCategoryBoard({ category, projects, sessions, activeTimer, onBack, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onOpenProject }: {
+  category: StudySubCategory;
+  projects: Project[];
+  sessions: Session[];
+  activeTimer: ActiveTimer | null;
+  onBack: () => void;
+  onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onDeleteProject: (project: Project) => Promise<void>;
+  onStartTimer: (project: Project) => Promise<void>;
+  onManualSession: (preset: ManualPreset) => void;
+  onOpenProject: (projectId: string) => void;
+}) {
+  return <div className="notion-page study-category-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{studyUi.pageTitle} / {studySubCategoryLabels[category]}</div><h2>{studySubCategoryLabels[category]}</h2><p>{'\u8fd9\u91cc\u653e\u5f53\u524d\u5b66\u4e60\u7c7b\u578b\u4e0b\u7684\u9879\u76ee\uff0c\u70b9\u51fb\u9879\u76ee\u8fdb\u5165\u8be6\u60c5\u9875\u3002'}</p></section><section className="panel exercise-projects-panel category-projects-panel"><StudyProjectLibrary projects={projects} sessions={sessions} activeTimer={activeTimer} onOpenProject={onOpenProject} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} category={category} /></section></div>;
+}
+
+function StudyProjectLibrary({ projects, sessions, activeTimer, onOpenProject, onCreateProject, onDeleteProject, onStartTimer, onManualSession, category }: {
+  projects: Project[];
+  sessions: Session[];
+  activeTimer: ActiveTimer | null;
+  onOpenProject: (id: string) => void;
+  onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onDeleteProject: (project: Project) => Promise<void>;
+  onStartTimer: (project: Project) => Promise<void>;
+  onManualSession: (preset: ManualPreset) => void;
+  category: StudySubCategory;
+}) {
+  const [name, setName] = useState('');
+  const create = async () => { if (!name.trim()) return; const project = await onCreateProject({ name: name.trim(), mainCategory: 'study', subCategory: category, status: 'active' }); setName(''); onOpenProject(project.id); };
+  return <div className="exercise-project-section study-project-section"><div className="inline-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={studyUi.newProjectPlaceholder} /><button className="secondary-button compact" onClick={create}>{studyUi.create}</button></div>{projects.length === 0 ? <p className="empty-text">{studyUi.noProject}</p> : <div className="exercise-project-list">{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = projectSessions.reduce((sum, session) => sum + session.durationMinutes, 0); return <article key={project.id} className="exercise-project-card study-project-card" onClick={() => onOpenProject(project.id)}><strong>{project.name}</strong><span>{projectSessions.length} {studyUi.times} / {formatDuration(total)}</span><div className="exercise-card-actions"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={(event) => { event.stopPropagation(); void onStartTimer(project); }}>{T.startTimer}</button><button className="secondary-button compact" onClick={(event) => { event.stopPropagation(); onManualSession({ mainCategory: 'study', subCategory: category, projectId: project.id }); }}>{T.manualSession}</button><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteProject(project); }}>{commonUi.delete}</button></div></article>; })}</div>}</div>;
+}
+
+function StudyProjectPage({ project, sessions, chapters, activeTimer, onBack, onDeleteProject, onStartTimer, onManualSession, onSaveChapter, onDeleteChapter }: { project: Project; sessions: Session[]; chapters: StudyChapter[]; activeTimer: ActiveTimer | null; onBack: () => void; onDeleteProject: (project: Project) => Promise<void>; onStartTimer: (project: Project) => Promise<void>; onManualSession: (preset: ManualPreset) => void; onSaveChapter: (chapter: StudyChapter) => Promise<void>; onDeleteChapter: (chapter: StudyChapter) => Promise<void> }) {
+  const orderedSessions = [...sessions].sort((a, b) => b.startTime.localeCompare(a.startTime));
+  const total = orderedSessions.reduce((sum, session) => sum + session.durationMinutes, 0);
+  const average = orderedSessions.length > 0 ? Math.round(total / orderedSessions.length) : 0;
+  return <div className="notion-page study-project-page"><section className="notion-doc-title"><div className="notion-title-actions"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><button className="danger-button compact" onClick={() => void onDeleteProject(project)}>{commonUi.delete}</button></div><div className="notion-breadcrumb">{studyUi.pageTitle} / {studySubCategoryLabels[project.subCategory as StudySubCategory]} / {project.name}</div><h2>{project.name}</h2></section><section className="notebook-toolbar"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory: 'study', subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button></section><section className="panel"><div className="exercise-detail-stats"><div><span>{studyUi.count}</span><strong>{orderedSessions.length} {studyUi.times}</strong></div><div><span>{studyUi.totalTime}</span><strong>{formatDuration(total)}</strong></div><div><span>{studyUi.averageTime}</span><strong>{formatDuration(average)}</strong></div><div><span>{studyUi.latestRecord}</span><strong>{orderedSessions[0] ? formatDateTime(orderedSessions[0].startTime) : studyUi.empty}</strong></div></div></section><section className="panel"><StudyChapterTable project={project} chapters={chapters} onSaveChapter={onSaveChapter} onDeleteChapter={onDeleteChapter} /></section><section className="panel"><h3>{T.recentRecords}</h3>{orderedSessions.length === 0 ? <p className="empty-text">{T.noRecords}</p> : <div className="exercise-session-list">{orderedSessions.map((session) => <StudySessionCard key={session.id} session={session} chapters={chapters} />)}</div>}</section></div>;
+}
+
+function StudyChapterTable({ project, chapters, onSaveChapter, onDeleteChapter }: { project: Project; chapters: StudyChapter[]; onSaveChapter: (chapter: StudyChapter) => Promise<void>; onDeleteChapter: (chapter: StudyChapter) => Promise<void> }) {
+  const [title, setTitle] = useState('');
+  const ordered = [...chapters].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const create = async () => { if (!title.trim()) return; const timestamp = nowIso(); await onSaveChapter({ id: createId(), projectId: project.id, title: title.trim(), status: 'notStarted', createdAt: timestamp, updatedAt: timestamp }); setTitle(''); };
+  return <div className="study-chapter-table"><div className="section-heading"><h3>{studyUi.hierarchy}</h3></div><div className="inline-create"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={studyUi.chapterPlaceholder} /><button className="secondary-button compact" onClick={create}>{studyUi.addChapter}</button></div>{ordered.length === 0 ? <p className="empty-text">{studyUi.noChapters}</p> : <div className="study-chapter-list">{ordered.map((chapter) => <div key={chapter.id} className="study-chapter-row"><strong>{chapter.title}</strong><button className={chapter.status === 'completed' ? 'status-pill active' : 'status-pill'} onClick={() => onSaveChapter({ ...chapter, status: chapter.status === 'completed' ? 'notStarted' : 'completed' })}>{chapter.status === 'completed' ? studyUi.completed : studyUi.notStarted}</button><button className="danger-button compact" onClick={() => void onDeleteChapter(chapter)}>{commonUi.delete}</button></div>)}</div>}</div>;
+}
+
+function StudyChapterSelector({ chapters, selectedIds, onChange }: { chapters: StudyChapter[]; selectedIds: string[]; onChange: (ids: string[]) => void }) {
+  const toggle = (id: string) => onChange(selectedIds.includes(id) ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]);
+  return <div className="chapter-selector"><span>{studyUi.relatedChapters}</span>{chapters.length === 0 ? <p className="empty-text">{studyUi.noChapters}</p> : <div className="chapter-checkbox-grid">{chapters.map((chapter) => <label key={chapter.id}><input type="checkbox" checked={selectedIds.includes(chapter.id)} onChange={() => toggle(chapter.id)} />{chapter.title}</label>)}</div>}</div>;
+}
+
+function StudySessionCard({ session, chapters }: { session: Session; chapters: StudyChapter[] }) {
+  const sessionChapters = chapters.filter((chapter) => session.chapterIds?.includes(chapter.id));
+  return <article className="exercise-session-card study-session-card"><div className="daily-session-card-head"><strong>{formatDateTime(session.startTime)} - {formatDateTime(session.endTime)}</strong><span>{formatDuration(session.durationMinutes)}</span></div>{sessionChapters.length > 0 ? <div className="daily-session-field"><b>{studyUi.relatedChapters}</b><span>{sessionChapters.map((chapter) => chapter.title).join('\u3001')}</span></div> : null}<div className="daily-session-field"><b>{studyUi.learnedContent}</b><span>{session.content || studyUi.empty}</span></div><div className="daily-session-field"><b>{studyUi.feeling}</b><span>{session.feelings || studyUi.empty}</span></div>{session.attachments?.length ? <div className="daily-session-images">{session.attachments.map((image) => <img key={image.id} src={image.data} alt={studyUi.learnedContent} />)}</div> : null}</article>;
+}
+
+function StudyTimeDistribution({ sessions }: { sessions: Session[] }) {
+  const totals = studySubCategoryOptions.reduce((acc, category) => ({ ...acc, [category]: 0 }), {} as Record<StudySubCategory, number>);
+  sessions.forEach((session) => { const key = session.subCategory as StudySubCategory; if (key in totals) totals[key] += session.durationMinutes; });
+  const total = Object.values(totals).reduce((sum, value) => sum + value, 0);
+  return <div className="exercise-distribution study-distribution"><div className="exercise-progress-list">{studySubCategoryOptions.map((category) => { const minutes = totals[category]; const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; return <div className="exercise-progress-row" key={category}><span>{studySubCategoryLabels[category]}</span><div className="exercise-progress"><div className={category} style={{ width: percent + '%' }} /></div><strong>{formatDuration(minutes)} / {percent}%</strong></div>; })}</div></div>;
+}
+
+function StudyMonthCalendar({ sessions, projects, chapters, onOpenProject }: { sessions: Session[]; projects: Project[]; chapters: StudyChapter[]; onOpenProject: (id: string) => void }) {
+  const [monthCursor, setMonthCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
+  const cells = buildExerciseMonthCells(monthCursor);
+  const selectedSessions = sessions.filter((session) => toDateKey(new Date(session.startTime)) === selectedDate);
+  return <div className="exercise-calendar exercise-month-calendar study-month-calendar"><div className="calendar-toolbar"><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>{studyUi.previousMonth}</button><strong>{monthCursor.getFullYear()}{'\u5e74'}{monthCursor.getMonth() + 1}{'\u6708'}</strong><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>{studyUi.nextMonth}</button></div><div className="exercise-month-weekdays">{['\u5468\u4e00','\u5468\u4e8c','\u5468\u4e09','\u5468\u56db','\u5468\u4e94','\u5468\u516d','\u5468\u65e5'].map((day) => <span key={day}>{day}</span>)}</div><div className="exercise-month-grid">{cells.map((date, index) => { if (!date) return <span key={'empty-' + index} className="exercise-month-empty" />; const key = toDateKey(date); const daySessions = sessions.filter((session) => toDateKey(new Date(session.startTime)) === key); const marker = getStudyDayMarker(daySessions); return <button key={key} className={'exercise-month-day study-month-day ' + marker + (selectedDate === key ? ' selected' : '')} onClick={() => setSelectedDate(key)}><strong>{date.getDate()}</strong>{daySessions.length > 0 ? <span>{daySessions.length} {studyUi.times}</span> : <em>{studyUi.rest}</em>}</button>; })}</div><div className="selected-exercise-day selected-study-day"><h3>{selectedDate}</h3>{selectedSessions.length === 0 ? <p className="empty-text">{studyUi.dayEmpty}</p> : selectedSessions.map((session) => { const project = projects.find((item) => item.id === session.projectId); const sessionChapters = chapters.filter((chapter) => session.chapterIds?.includes(chapter.id)); return <button className="exercise-day-record" key={session.id} onClick={() => onOpenProject(session.projectId)}><strong>{studySubCategoryLabels[session.subCategory as StudySubCategory] ?? session.subCategory} / {session.projectNameSnapshot}</strong><span>{sessionChapters.length > 0 ? sessionChapters.map((chapter) => chapter.title).join('\u3001') : studyUi.noChapters}</span><em>{session.content || project?.name || studyUi.empty}</em></button>; })}</div></div>;
+}
+
+function getStudyDayMarker(sessions: Session[]) {
+  if (sessions.length === 0) return 'none';
+  const types = new Set(sessions.map((session) => session.subCategory));
+  if (types.size > 1) return 'study-mixed';
+  return Array.from(types)[0] || 'none';
+}
+
+function StudyLibraryPanel({ type, projects, items, onSaveItem, onDeleteItem }: { type: StudyLibraryType; projects: Project[]; items: StudyLibraryItem[]; onSaveItem: (item: StudyLibraryItem) => Promise<void>; onDeleteItem: (item: StudyLibraryItem) => Promise<void> }) {
+  const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageData, setImageData] = useState('');
+  useEffect(() => { if (!projectId && projects[0]) setProjectId(projects[0].id); if (projectId && !projects.some((project) => project.id === projectId)) setProjectId(projects[0]?.id ?? ''); }, [projects, projectId]);
+  const label = type === 'mistake' ? studyUi.mistakes : studyUi.notes;
+  const saveLabel = type === 'mistake' ? studyUi.saveMistake : studyUi.saveNote;
+  const selectedItems = projectId ? items.filter((item) => item.projectId === projectId) : items;
+  const create = async () => {
+    if (!projectId || !title.trim()) return;
+    const timestamp = nowIso();
+    await onSaveItem({ id: createId(), type, projectId, title: title.trim(), content, imageUrl: imageUrl.trim() || undefined, imageData: imageData || undefined, createdAt: timestamp, updatedAt: timestamp });
+    setTitle(''); setContent(''); setImageUrl(''); setImageData('');
+  };
+  const upload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setImageData(String(reader.result));
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+  return <div className="study-library-panel"><div className="section-heading"><h2>{label}</h2></div>{projects.length === 0 ? <p className="empty-text">{studyUi.noProject}</p> : <><div className="study-library-form"><select value={projectId} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{studySubCategoryLabels[project.subCategory as StudySubCategory]} / {project.name}</option>)}</select><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={studyUi.title} /><textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder={studyUi.content} rows={3} /><input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder={studyUi.imageUrl} /><label className="secondary-button compact file-like-button"><input type="file" accept="image/*" onChange={upload} />{studyUi.uploadImage}</label><button className="primary-button" onClick={create}>{saveLabel}</button></div>{imageData ? <img className="study-library-preview" src={imageData} alt={label} /> : null}{selectedItems.length === 0 ? <p className="empty-text">{studyUi.noLibraryItem}</p> : <div className="study-library-list">{selectedItems.map((item) => <article key={item.id} className="study-library-item"><div><strong>{item.title}</strong><span>{formatDateTime(item.createdAt)}</span></div>{item.content ? <p>{item.content}</p> : null}{item.imageUrl ? <img src={item.imageUrl} alt={item.title} /> : null}{item.imageData ? <img src={item.imageData} alt={item.title} /> : null}<button className="danger-button compact" onClick={() => void onDeleteItem(item)}>{commonUi.delete}</button></article>)}</div>}</>}</div>;
 }
 
 function SelectExerciseSubCategory({ value, onChange }: { value: ExerciseSubCategory; onChange: (value: ExerciseSubCategory) => void }) {

@@ -1,9 +1,9 @@
-import type { ActiveTimer, ExercisePlan, GrowthMetric, GrowthRecord, Project, ProjectImage, ProjectJournalEntry, ProjectReminder, Session, WeeklyPlan } from './types';
+import type { ActiveTimer, ExercisePlan, GrowthMetric, GrowthRecord, Project, ProjectImage, ProjectJournalEntry, ProjectReminder, Session, StudyChapter, StudyLibraryItem, WeeklyPlan } from './types';
 
-type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'projectReminders' | 'exercisePlans' | 'growthMetrics' | 'growthRecords' | 'activeTimer';
+type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'projectReminders' | 'exercisePlans' | 'growthMetrics' | 'growthRecords' | 'studyChapters' | 'studyLibraryItems' | 'activeTimer';
 
 const DB_NAME = 'personal-management-system';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -55,6 +55,15 @@ const openDatabase = () => {
         const store = db.createObjectStore('growthRecords', { keyPath: 'id' });
         store.createIndex('metricId', 'metricId');
         store.createIndex('date', 'date');
+      }
+      if (!db.objectStoreNames.contains('studyChapters')) {
+        const store = db.createObjectStore('studyChapters', { keyPath: 'id' });
+        store.createIndex('projectId', 'projectId');
+      }
+      if (!db.objectStoreNames.contains('studyLibraryItems')) {
+        const store = db.createObjectStore('studyLibraryItems', { keyPath: 'id' });
+        store.createIndex('projectId', 'projectId');
+        store.createIndex('type', 'type');
       }
       if (!db.objectStoreNames.contains('activeTimer')) {
         db.createObjectStore('activeTimer', { keyPath: 'id' });
@@ -121,6 +130,12 @@ export const storage = {
   getGrowthRecords: () => getAll<GrowthRecord>('growthRecords'),
   saveGrowthRecord: (record: GrowthRecord) => put('growthRecords', record),
   deleteGrowthRecord: (id: string) => remove('growthRecords', id),
+  getStudyChapters: () => getAll<StudyChapter>('studyChapters'),
+  saveStudyChapter: (chapter: StudyChapter) => put('studyChapters', chapter),
+  deleteStudyChapter: (id: string) => remove('studyChapters', id),
+  getStudyLibraryItems: () => getAll<StudyLibraryItem>('studyLibraryItems'),
+  saveStudyLibraryItem: (item: StudyLibraryItem) => put('studyLibraryItems', item),
+  deleteStudyLibraryItem: (id: string) => remove('studyLibraryItems', id),
   getActiveTimer: async () => {
     const timers = await getAll<ActiveTimer>('activeTimer');
     return timers[0] ?? null;

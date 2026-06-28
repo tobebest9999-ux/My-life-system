@@ -4,6 +4,12 @@ export type EntertainmentSubCategory = 'game' | 'anime' | 'manga' | 'other';
 
 export type ExerciseSubCategory = 'strength' | 'cardio' | 'other';
 
+export type StudySubCategory = 'computer' | 'math' | 'english' | 'other';
+
+export type StudyChapterStatus = 'notStarted' | 'completed';
+
+export type StudyLibraryType = 'mistake' | 'note';
+
 export type ProjectStatus =
   | 'wishlist'
   | 'planned'
@@ -58,6 +64,28 @@ export interface Session {
   energyScore?: number;
   moodScore?: number;
   attachments?: SessionAttachment[];
+  chapterIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudyChapter {
+  id: string;
+  projectId: string;
+  title: string;
+  status: StudyChapterStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudyLibraryItem {
+  id: string;
+  type: StudyLibraryType;
+  projectId: string;
+  title: string;
+  content: string;
+  imageData?: string;
+  imageUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
