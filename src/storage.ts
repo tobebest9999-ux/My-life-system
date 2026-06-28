@@ -1,9 +1,9 @@
-import type { ActiveTimer, ExercisePlan, GrowthMetric, GrowthRecord, Project, ProjectImage, ProjectJournalEntry, Session, WeeklyPlan } from './types';
+import type { ActiveTimer, ExercisePlan, GrowthMetric, GrowthRecord, Project, ProjectImage, ProjectJournalEntry, ProjectReminder, Session, WeeklyPlan } from './types';
 
-type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'exercisePlans' | 'growthMetrics' | 'growthRecords' | 'activeTimer';
+type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'projectReminders' | 'exercisePlans' | 'growthMetrics' | 'growthRecords' | 'activeTimer';
 
 const DB_NAME = 'personal-management-system';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -37,6 +37,11 @@ const openDatabase = () => {
         const store = db.createObjectStore('projectJournalEntries', { keyPath: 'id' });
         store.createIndex('projectId', 'projectId');
         store.createIndex('date', 'date');
+      }
+      if (!db.objectStoreNames.contains('projectReminders')) {
+        const store = db.createObjectStore('projectReminders', { keyPath: 'id' });
+        store.createIndex('projectId', 'projectId');
+        store.createIndex('scheduledAt', 'scheduledAt');
       }
       if (!db.objectStoreNames.contains('exercisePlans')) {
         const store = db.createObjectStore('exercisePlans', { keyPath: 'id' });
@@ -104,6 +109,9 @@ export const storage = {
   getProjectJournalEntries: () => getAll<ProjectJournalEntry>('projectJournalEntries'),
   saveProjectJournalEntry: (entry: ProjectJournalEntry) => put('projectJournalEntries', entry),
   deleteProjectJournalEntry: (id: string) => remove('projectJournalEntries', id),
+  getProjectReminders: () => getAll<ProjectReminder>('projectReminders'),
+  saveProjectReminder: (reminder: ProjectReminder) => put('projectReminders', reminder),
+  deleteProjectReminder: (id: string) => remove('projectReminders', id),
   getExercisePlans: () => getAll<ExercisePlan>('exercisePlans'),
   saveExercisePlan: (plan: ExercisePlan) => put('exercisePlans', plan),
   deleteExercisePlan: (id: string) => remove('exercisePlans', id),

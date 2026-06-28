@@ -20,6 +20,8 @@ export type PlanTargetType = 'duration' | 'count' | 'completion';
 
 export type ExercisePlanStatus = 'active' | 'done' | 'skipped';
 
+export type ProjectReminderStatus = 'active' | 'done' | 'skipped';
+
 export interface Project {
   id: string;
   name: string;
@@ -73,6 +75,18 @@ export interface ExercisePlan {
   updatedAt: string;
 }
 
+export interface ProjectReminder {
+  id: string;
+  mainCategory: MainCategory;
+  subCategory: string;
+  projectId: string;
+  title: string;
+  scheduledAt: string;
+  note: string;
+  status: ProjectReminderStatus;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface GrowthMetric {
   id: string;
   name: string;

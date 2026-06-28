@@ -21,6 +21,7 @@ import type {
   Project,
   ProjectImage,
   ProjectJournalEntry,
+  ProjectReminder,
   ProjectStatus,
   Session,
   SessionAttachment,
@@ -169,11 +170,20 @@ const commonUi = {
   confirmDeleteMetricStart: '\u786e\u5b9a\u5220\u9664\u6210\u957f\u9879\u300c',
   confirmDeleteMetricEnd: '\u300d\u5417\uff1f\u8fd9\u4e2a\u6210\u957f\u9879\u4e0b\u9762\u7684\u8bb0\u5f55\u4e5f\u4f1a\u4e00\u8d77\u5220\u9664\u3002',
   confirmDeleteGrowthRecord: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u6210\u957f\u8bb0\u5f55\u5417\uff1f',
+  confirmDeleteReminder: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u63d0\u9192\u5417\uff1f',
   noExerciseData: '\u6682\u65e0\u8fd0\u52a8\u8bb0\u5f55',
 };
 
 function sortByCreated<TItem extends { createdAt: string }>(items: TItem[]) {
   return [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+function isLegacyEntertainmentReminder(plan: WeeklyPlan) {
+  return plan.mainCategory === 'entertainment'
+    && Boolean(plan.projectId)
+    && Boolean(plan.deadline)
+    && plan.targetType === 'completion'
+    && plan.title.trim().startsWith('\u8fdb\u884c ');
 }
 
 function App() {
@@ -182,6 +192,7 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [weeklyPlans, setWeeklyPlans] = useState<WeeklyPlan[]>([]);
+  const [projectReminders, setProjectReminders] = useState<ProjectReminder[]>([]);
   const [exercisePlans, setExercisePlans] = useState<ExercisePlan[]>([]);
   const [growthMetrics, setGrowthMetrics] = useState<GrowthMetric[]>([]);
   const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>([]);
@@ -194,12 +205,13 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   const reload = async () => {
-    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedExercisePlans, storedGrowthMetrics, storedGrowthRecords, storedTimer] = await Promise.all([
+    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedProjectReminders, storedExercisePlans, storedGrowthMetrics, storedGrowthRecords, storedTimer] = await Promise.all([
       storage.getProjects(),
       storage.getSessions(),
       storage.getWeeklyPlans(),
       storage.getProjectImages(),
       storage.getProjectJournalEntries(),
+      storage.getProjectReminders(),
       storage.getExercisePlans(),
       storage.getGrowthMetrics(),
       storage.getGrowthRecords(),
@@ -210,6 +222,7 @@ function App() {
     setWeeklyPlans(sortByCreated(storedPlans));
     setImages(storedImages);
     setJournalEntries(storedJournalEntries);
+    setProjectReminders(sortByCreated(storedProjectReminders));
     setExercisePlans(sortByCreated(storedExercisePlans));
     setGrowthMetrics(sortByCreated(storedGrowthMetrics));
     setGrowthRecords(sortByCreated(storedGrowthRecords));
@@ -290,6 +303,7 @@ function App() {
       ...images.filter((image) => image.projectId === project.id).map((image) => storage.deleteProjectImage(image.id)),
       ...journalEntries.filter((entry) => entry.projectId === project.id).map((entry) => storage.deleteProjectJournalEntry(entry.id)),
       ...weeklyPlans.filter((plan) => plan.projectId === project.id).map((plan) => storage.deleteWeeklyPlan(plan.id)),
+      ...projectReminders.filter((reminder) => reminder.projectId === project.id).map((reminder) => storage.deleteProjectReminder(reminder.id)),
       ...exercisePlans.filter((plan) => plan.projectId === project.id).map((plan) => storage.deleteExercisePlan(plan.id)),
     ]);
     await storage.deleteProject(project.id);
@@ -360,8 +374,27 @@ function App() {
     await reload();
   };
 
+  const saveProjectReminder = async (reminder: ProjectReminder) => {
+    await storage.saveProjectReminder({ ...reminder, updatedAt: nowIso() });
+    await reload();
+  };
+
+  const deleteProjectReminder = async (reminder: ProjectReminder) => {
+    const confirmed = window.confirm(commonUi.confirmDeleteReminder);
+    if (!confirmed) return;
+    await storage.deleteProjectReminder(reminder.id);
+    await reload();
+  };
+
   const saveExercisePlan = async (plan: ExercisePlan) => {
     await storage.saveExercisePlan({ ...plan, updatedAt: nowIso() });
+    await reload();
+  };
+
+  const deleteExercisePlan = async (plan: ExercisePlan) => {
+    const confirmed = window.confirm(commonUi.confirmDeleteReminder);
+    if (!confirmed) return;
+    await storage.deleteExercisePlan(plan.id);
     await reload();
   };
 
@@ -407,6 +440,8 @@ function App() {
     setDialog('quickStart');
   };
 
+  const dashboardPlans = weeklyPlans.filter((plan) => !isLegacyEntertainmentReminder(plan));
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -438,7 +473,7 @@ function App() {
           <DashboardPage
             projects={projects}
             sessions={sessions}
-            plans={weeklyPlans}
+            plans={dashboardPlans}
             activeTimer={activeTimer}
             onQuickStart={openQuickStart}
             onEndTimer={() => setDialog('endTimer')}
@@ -451,7 +486,7 @@ function App() {
             projects={projects}
             sessions={sessions}
             images={images}
-            plans={weeklyPlans}
+            reminders={projectReminders}
             activeTimer={activeTimer}
             onCreateProject={createProject}
             onUpdateProject={updateProject}
@@ -461,7 +496,8 @@ function App() {
             journalEntries={journalEntries}
             onAddImage={addImage}
             onSaveJournalEntry={saveJournalEntry}
-            onSavePlan={savePlan}
+            onSaveReminder={saveProjectReminder}
+            onDeleteReminder={deleteProjectReminder}
           />
         ) : null}
         {!loading && page === 'exercise' ? (
@@ -477,6 +513,7 @@ function App() {
             onStartTimer={startTimer}
             onManualSession={openManual}
             onSaveExercisePlan={saveExercisePlan}
+            onDeleteExercisePlan={deleteExercisePlan}
             onSaveGrowthMetric={saveGrowthMetric}
             onDeleteGrowthMetric={deleteGrowthMetric}
             onSaveGrowthRecord={saveGrowthRecord}
@@ -714,12 +751,12 @@ function PlanRow({ plan, projects, onSavePlan }: { plan: WeeklyPlan; projects: P
   return <div className="plan-row"><div><div className="plan-title">{plan.title}</div><div className="meta-line">{plan.mainCategory ? mainCategoryLabels[plan.mainCategory] : T.noRelatedCategory}{project ? ' / ' + project.name : ''}{plan.deadline ? ' / ' + T.deadline + ' ' + formatDate(plan.deadline) : ''}</div></div><div className="plan-controls"><span className={'status-pill ' + plan.status}>{planStatusLabels[plan.status]}</span><input aria-label={T.currentProgress} type="number" min="0" value={progress} onChange={(event) => setProgress(event.target.value)} /><button className="secondary-button compact" onClick={() => onSavePlan({ ...plan, currentProgress: Number(progress || 0) })}>{T.updateProgress}</button><button className="secondary-button compact" onClick={() => onSavePlan({ ...plan, status: 'completed' })}>{T.markCompleted}</button><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'skipped' })}>{T.skip}</button></div></div>;
 }
 
-function EntertainmentPage({ projects, sessions, images, journalEntries, plans, activeTimer, onCreateProject, onUpdateProject, onDeleteProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSavePlan }: {
+function EntertainmentPage({ projects, sessions, images, journalEntries, reminders, activeTimer, onCreateProject, onUpdateProject, onDeleteProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSaveReminder, onDeleteReminder }: {
   projects: Project[];
   sessions: Session[];
   images: ProjectImage[];
   journalEntries: ProjectJournalEntry[];
-  plans: WeeklyPlan[];
+  reminders: ProjectReminder[];
   activeTimer: ActiveTimer | null;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
   onUpdateProject: (project: Project) => Promise<void>;
@@ -728,7 +765,8 @@ function EntertainmentPage({ projects, sessions, images, journalEntries, plans, 
   onManualSession: (preset: ManualPreset) => void;
   onAddImage: (project: Project, data: string, caption?: string) => Promise<void>;
   onSaveJournalEntry: (entry: ProjectJournalEntry) => Promise<void>;
-  onSavePlan: (plan: WeeklyPlan) => Promise<void>;
+  onSaveReminder: (reminder: ProjectReminder) => Promise<void>;
+  onDeleteReminder: (reminder: ProjectReminder) => Promise<void>;
 }) {
   const [view, setView] = useState<'home' | 'category' | 'project'>('home');
   const [category, setCategory] = useState('game');
@@ -739,10 +777,10 @@ function EntertainmentPage({ projects, sessions, images, journalEntries, plans, 
   const enterProject = (id: string) => { setSelectedId(id); setView('project'); };
   const deleteAndLeaveProject = async (project: Project) => { await onDeleteProject(project); setSelectedId(''); setView('category'); };
   if (view === 'project' && selectedProject) {
-    return <ProjectDetail project={selectedProject} sessions={sessions.filter((session) => session.projectId === selectedProject.id)} images={images.filter((image) => image.projectId === selectedProject.id)} journalEntries={journalEntries.filter((entry) => entry.projectId === selectedProject.id)} plans={plans.filter((plan) => plan.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onUpdateProject={onUpdateProject} onDeleteProject={deleteAndLeaveProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onAddImage={onAddImage} onSaveJournalEntry={onSaveJournalEntry} onSavePlan={onSavePlan} />;
+    return <ProjectDetail project={selectedProject} sessions={sessions.filter((session) => session.projectId === selectedProject.id)} images={images.filter((image) => image.projectId === selectedProject.id)} journalEntries={journalEntries.filter((entry) => entry.projectId === selectedProject.id)} reminders={reminders.filter((reminder) => reminder.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onUpdateProject={onUpdateProject} onDeleteProject={deleteAndLeaveProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onAddImage={onAddImage} onSaveJournalEntry={onSaveJournalEntry} onSaveReminder={onSaveReminder} onDeleteReminder={onDeleteReminder} />;
   }
   if (view === 'category') {
-    return <EntertainmentCategoryBoard category={category} projects={entertainmentProjects.filter((project) => project.subCategory === category)} sessions={sessions} plans={plans} onBack={() => setView('home')} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onOpenProject={enterProject} />;
+    return <EntertainmentCategoryBoard category={category} projects={entertainmentProjects.filter((project) => project.subCategory === category)} sessions={sessions} reminders={reminders} onBack={() => setView('home')} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onOpenProject={enterProject} />;
   }
   return <EntertainmentHome sessions={sessions} projects={entertainmentProjects} onOpenCategory={enterCategory} />;
 }
@@ -755,17 +793,17 @@ function EntertainmentHome({ sessions, projects, onOpenCategory }: { sessions: S
   return <div className="notion-page entertainment-notion"><section className="notion-hero"><div className="notion-breadcrumb">个人管理系统 / 娱乐</div><h2>娱乐</h2><p>把游戏、动画、漫画和其他娱乐当成一个轻量资料库：先收集项目，再记录时间、感受和提醒。</p><div className="notion-hero-stats"><span>{projects.length} 个项目</span><span>{formatDuration(total)} 总时长</span><span>{entertainmentSessions.length} 条记录</span></div></section><section className="notion-section"><div className="notion-section-title"><h3>娱乐资料库</h3><span>点击分类进入对应 database</span></div><div className="notion-category-grid">{Object.entries(subCategoryLabels.entertainment).map(([key, label]) => { const minutes = totals[key] ?? 0; const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; const categoryProjects = projects.filter((project) => project.subCategory === key); const recent = categoryProjects[0]; return <button key={key} className="notion-category-card" onClick={() => onOpenCategory(key)}><div><strong>{label}</strong><span>{categoryProjects.length} 个项目</span></div><p>{recent ? '最近：' + recent.name : '暂无项目'}</p><div className="notion-progress"><div style={{ width: percent + '%' }} /></div><footer><span>{formatDuration(minutes)}</span><em>{percent}%</em></footer></button>; })}</div></section><section className="notion-section"><div className="notion-section-title"><h3>时间分布</h3><span>database summary</span></div><div className="notion-progress-list">{Object.entries(subCategoryLabels.entertainment).map(([key, label]) => { const minutes = totals[key] ?? 0; const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; return <div className="notion-progress-row" key={key}><span>{label}</span><div className="notion-progress"><div style={{ width: percent + '%' }} /></div><strong>{formatDuration(minutes)}</strong></div>; })}</div></section><section className="notion-section"><div className="notion-section-title"><h3>高频项目</h3><span>按累计时长排序</span></div><CompactRows rows={topProjects.map((item) => [item.project.name, formatDuration(item.minutes)])} empty={T.noRecords} /></section></div>;
 }
 
-function EntertainmentCategoryBoard({ category, projects, sessions, plans, onBack, onCreateProject, onDeleteProject, onOpenProject }: {
+function EntertainmentCategoryBoard({ category, projects, sessions, reminders, onBack, onCreateProject, onDeleteProject, onOpenProject }: {
   category: string;
   projects: Project[];
   sessions: Session[];
-  plans: WeeklyPlan[];
+  reminders: ProjectReminder[];
   onBack: () => void;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
   onDeleteProject: (project: Project) => Promise<void>;
   onOpenProject: (projectId: string) => void;
 }) {
-  return <div className="notion-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{T.entertainment} / {getSubCategoryLabel('entertainment', category)}</div><h2>{getSubCategoryLabel('entertainment', category)}</h2><p>{'\u50cf Notion database \u4e00\u6837\u7ba1\u7406\u8fd9\u4e2a\u5206\u7c7b\u4e0b\u7684\u9879\u76ee\u3002\u70b9\u51fb\u4efb\u610f\u4e00\u884c\u8fdb\u5165\u9879\u76ee\u7b14\u8bb0\u9875\u3002'}</p></section><EntertainmentProjectForm subCategory={category} onCreateProject={onCreateProject} /><section className="notion-section"><div className="notion-section-title"><h3>{'\u9879\u76ee\u8868\u683c'}</h3><span>{projects.length} {'\u4e2a\u9879\u76ee'}</span></div>{projects.length === 0 ? <p className="empty-text">{T.noProject}</p> : <div className="project-table-wrap notion-table-wrap"><table className="project-table notion-table"><thead><tr><th>{T.project}</th><th>{'\u72b6\u6001'}</th><th>{'\u603b\u65f6\u957f'}</th><th>{'\u6700\u8fd1\u8bb0\u5f55'}</th><th>{'\u8ba1\u5212/\u63d0\u9192'}</th><th>{'\u6700\u8fd1\u611f\u53d7'}</th><th>{commonUi.action}</th></tr></thead><tbody>{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = getProjectTotalMinutes(project.id, sessions); const latest = projectSessions[0]; const projectPlans = plans.filter((plan) => plan.projectId === project.id); const nextPlan = projectPlans.filter((plan) => getEffectivePlanStatus(plan) === 'active' && plan.deadline).sort((a, b) => new Date(a.deadline || '').getTime() - new Date(b.deadline || '').getTime())[0]; const planSummary = nextPlan ? formatDateTime(nextPlan.deadline || nextPlan.createdAt) + ' / ' + nextPlan.title : projectPlans.length > 0 ? projectPlans.length + ' ' + '\u4e2a\u8ba1\u5212\u8bb0\u5f55' : '\u6682\u65e0\u63d0\u9192'; return <tr key={project.id} onClick={() => onOpenProject(project.id)}><td><strong>{project.name}</strong><small>{getSubCategoryLabel(project.mainCategory, project.subCategory)}</small></td><td><span className="notion-tag">{projectStatusLabels[project.status]}</span></td><td>{formatDuration(total)}</td><td>{latest ? formatDateTime(latest.startTime) + ' / ' + formatDuration(latest.durationMinutes) : '\u6682\u65e0\u8bb0\u5f55'}</td><td>{planSummary}</td><td>{latest?.feelings || '\u6682\u65e0\u611f\u53d7'}</td><td><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteProject(project); }}>{commonUi.delete}</button></td></tr>; })}</tbody></table></div>}</section></div>;
+  return <div className="notion-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{T.entertainment} / {getSubCategoryLabel('entertainment', category)}</div><h2>{getSubCategoryLabel('entertainment', category)}</h2><p>{'\u50cf Notion database \u4e00\u6837\u7ba1\u7406\u8fd9\u4e2a\u5206\u7c7b\u4e0b\u7684\u9879\u76ee\u3002\u70b9\u51fb\u4efb\u610f\u4e00\u884c\u8fdb\u5165\u9879\u76ee\u7b14\u8bb0\u9875\u3002'}</p></section><EntertainmentProjectForm subCategory={category} onCreateProject={onCreateProject} /><section className="notion-section"><div className="notion-section-title"><h3>{'\u9879\u76ee\u8868\u683c'}</h3><span>{projects.length} {'\u4e2a\u9879\u76ee'}</span></div>{projects.length === 0 ? <p className="empty-text">{T.noProject}</p> : <div className="project-table-wrap notion-table-wrap"><table className="project-table notion-table"><thead><tr><th>{T.project}</th><th>{'\u72b6\u6001'}</th><th>{'\u603b\u65f6\u957f'}</th><th>{'\u6700\u8fd1\u8bb0\u5f55'}</th><th>{'\u63d0\u9192'}</th><th>{'\u6700\u8fd1\u611f\u53d7'}</th><th>{commonUi.action}</th></tr></thead><tbody>{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const total = getProjectTotalMinutes(project.id, sessions); const latest = projectSessions[0]; const projectReminders = reminders.filter((reminder) => reminder.projectId === project.id); const nextReminder = projectReminders.filter((reminder) => reminder.status === 'active').sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())[0]; const planSummary = nextReminder ? formatDateTime(nextReminder.scheduledAt) + ' / ' + nextReminder.title : projectReminders.length > 0 ? projectReminders.length + ' ' + '\u6761\u63d0\u9192' : '\u6682\u65e0\u63d0\u9192'; return <tr key={project.id} onClick={() => onOpenProject(project.id)}><td><strong>{project.name}</strong><small>{getSubCategoryLabel(project.mainCategory, project.subCategory)}</small></td><td><span className="notion-tag">{projectStatusLabels[project.status]}</span></td><td>{formatDuration(total)}</td><td>{latest ? formatDateTime(latest.startTime) + ' / ' + formatDuration(latest.durationMinutes) : '\u6682\u65e0\u8bb0\u5f55'}</td><td>{planSummary}</td><td>{latest?.feelings || '\u6682\u65e0\u611f\u53d7'}</td><td><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteProject(project); }}>{commonUi.delete}</button></td></tr>; })}</tbody></table></div>}</section></div>;
 }
 
 function EntertainmentProjectForm({ subCategory, onCreateProject }: { subCategory: string; onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project> }) {
@@ -781,12 +819,12 @@ function EntertainmentProjectForm({ subCategory, onCreateProject }: { subCategor
   return <section className="notion-inline-create"><div className="notion-section-title"><h3>新建项目</h3><span>inline database toolbar</span></div><div className="notion-create-row"><label><span>{T.projectName}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={T.projectPlaceholder} /></label><label><span>{T.projectStatus}</span><select value={status} onChange={(event) => setStatus(event.target.value as ProjectStatus)}>{projectStatusOptions.map((option) => <option key={option} value={option}>{projectStatusLabels[option]}</option>)}</select></label><label><span>{T.imageUrl}</span><input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} /></label><button className="primary-button" onClick={submit}>{T.createProject}</button></div>{error ? <p className="error-text">{error}</p> : null}</section>;
 }
 
-function ProjectDetail({ project, sessions, images, journalEntries, plans, activeTimer, onBack, onUpdateProject, onDeleteProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSavePlan }: {
+function ProjectDetail({ project, sessions, images, journalEntries, reminders, activeTimer, onBack, onUpdateProject, onDeleteProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSaveReminder, onDeleteReminder }: {
   project?: Project;
   sessions: Session[];
   images: ProjectImage[];
   journalEntries: ProjectJournalEntry[];
-  plans: WeeklyPlan[];
+  reminders: ProjectReminder[];
   activeTimer: ActiveTimer | null;
   onBack: () => void;
   onUpdateProject: (project: Project) => Promise<void>;
@@ -795,16 +833,17 @@ function ProjectDetail({ project, sessions, images, journalEntries, plans, activ
   onManualSession: (preset: ManualPreset) => void;
   onAddImage: (project: Project, data: string, caption?: string) => Promise<void>;
   onSaveJournalEntry: (entry: ProjectJournalEntry) => Promise<void>;
-  onSavePlan: (plan: WeeklyPlan) => Promise<void>;
+  onSaveReminder: (reminder: ProjectReminder) => Promise<void>;
+  onDeleteReminder: (reminder: ProjectReminder) => Promise<void>;
 }) {
   const [reminderTime, setReminderTime] = useState('');
   const [reminderTitle, setReminderTitle] = useState('');
   if (!project) return <div className="detail-panel"><p className="empty-text">{T.chooseOrCreateDetail}</p></div>;
   const total = sessions.reduce((sum, session) => sum + session.durationMinutes, 0);
   const latest = sessions[0];
-  const nextPlan = plans.filter((plan) => getEffectivePlanStatus(plan) === 'active' && plan.deadline).sort((a, b) => new Date(a.deadline || '').getTime() - new Date(b.deadline || '').getTime())[0];
-  const addReminder = async () => { if (!reminderTime) return; const timestamp = nowIso(); await onSavePlan({ id: createId(), title: reminderTitle.trim() || '\u8fdb\u884c ' + project.name, mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id, deadline: fromInputDateTime(reminderTime), targetType: 'completion', currentProgress: 0, status: 'active', createdAt: timestamp, updatedAt: timestamp }); setReminderTime(''); setReminderTitle(''); };
-  return <div className="notion-page notion-project-page notebook-project-page"><section className="notion-doc-title"><div className="notion-title-actions"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><button className="danger-button compact" onClick={() => void onDeleteProject(project)}>{commonUi.delete}</button></div><div className="notion-breadcrumb">{T.entertainment} / {getSubCategoryLabel(project.mainCategory, project.subCategory)} / {project.name}</div><h2>{project.name}</h2><div className="notion-properties"><div><span>{'\u72b6\u6001'}</span><select value={project.status} onChange={(event) => onUpdateProject({ ...project, status: event.target.value as ProjectStatus })}>{projectStatusOptions.map((option) => <option key={option} value={option}>{projectStatusLabels[option]}</option>)}</select></div><div><span>{'\u5206\u7c7b'}</span><strong>{getSubCategoryLabel(project.mainCategory, project.subCategory)}</strong></div><div><span>{'\u603b\u65f6\u957f'}</span><strong>{formatDuration(total)}</strong></div><div><span>{'\u6700\u8fd1\u8bb0\u5f55'}</span><strong>{latest ? formatDateTime(latest.startTime) : '\u6682\u65e0\u8bb0\u5f55'}</strong></div><div><span>{'\u4e0b\u6b21\u63d0\u9192'}</span><strong>{nextPlan ? formatDateTime(nextPlan.deadline || nextPlan.createdAt) : '\u6682\u65e0\u63d0\u9192'}</strong></div></div></section><section className="notebook-toolbar"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button><label><span>{'\u63d0\u9192\u65f6\u95f4'}</span><input type="datetime-local" value={reminderTime} onChange={(event) => setReminderTime(event.target.value)} /></label><label><span>{'\u63d0\u9192\u5185\u5bb9'}</span><input value={reminderTitle} onChange={(event) => setReminderTitle(event.target.value)} placeholder={'\u8fdb\u884c ' + project.name} /></label><button className="secondary-button compact" onClick={addReminder}>{'\u4fdd\u5b58\u63d0\u9192'}</button></section><ProjectNotebook project={project} sessions={sessions} journalEntries={journalEntries} onSaveJournalEntry={onSaveJournalEntry} /><section className="notion-block legacy-images"><details><summary>{'\u5386\u53f2\u56fe\u7247'}</summary>{images.length > 0 ? <div className="image-grid">{images.map((image) => <figure key={image.id}><img src={image.data} alt={image.caption || T.projectImages} />{image.caption ? <figcaption>{image.caption}</figcaption> : null}</figure>)}</div> : <p className="empty-text">{'\u6682\u65e0\u5386\u53f2\u56fe\u7247'}</p>}</details></section></div>;
+  const nextReminder = reminders.filter((reminder) => reminder.status === 'active').sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())[0];
+  const addReminder = async () => { if (!reminderTime) return; const timestamp = nowIso(); await onSaveReminder({ id: createId(), title: reminderTitle.trim() || '\u8fdb\u884c ' + project.name, mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id, scheduledAt: fromInputDateTime(reminderTime), note: '', status: 'active', createdAt: timestamp, updatedAt: timestamp }); setReminderTime(''); setReminderTitle(''); };
+  return <div className="notion-page notion-project-page notebook-project-page"><section className="notion-doc-title"><div className="notion-title-actions"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><button className="danger-button compact" onClick={() => void onDeleteProject(project)}>{commonUi.delete}</button></div><div className="notion-breadcrumb">{T.entertainment} / {getSubCategoryLabel(project.mainCategory, project.subCategory)} / {project.name}</div><h2>{project.name}</h2><div className="notion-properties"><div><span>{'\u72b6\u6001'}</span><select value={project.status} onChange={(event) => onUpdateProject({ ...project, status: event.target.value as ProjectStatus })}>{projectStatusOptions.map((option) => <option key={option} value={option}>{projectStatusLabels[option]}</option>)}</select></div><div><span>{'\u5206\u7c7b'}</span><strong>{getSubCategoryLabel(project.mainCategory, project.subCategory)}</strong></div><div><span>{'\u603b\u65f6\u957f'}</span><strong>{formatDuration(total)}</strong></div><div><span>{'\u6700\u8fd1\u8bb0\u5f55'}</span><strong>{latest ? formatDateTime(latest.startTime) : '\u6682\u65e0\u8bb0\u5f55'}</strong></div><div><span>{'\u4e0b\u6b21\u63d0\u9192'}</span><strong>{nextReminder ? formatDateTime(nextReminder.scheduledAt) : '\u6682\u65e0\u63d0\u9192'}</strong></div></div></section><section className="notebook-toolbar"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory: project.mainCategory, subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button><label><span>{'\u63d0\u9192\u65f6\u95f4'}</span><input type="datetime-local" value={reminderTime} onChange={(event) => setReminderTime(event.target.value)} /></label><label><span>{'\u63d0\u9192\u5185\u5bb9'}</span><input value={reminderTitle} onChange={(event) => setReminderTitle(event.target.value)} placeholder={'\u8fdb\u884c ' + project.name} /></label><button className="secondary-button compact" onClick={addReminder}>{'\u4fdd\u5b58\u63d0\u9192'}</button></section>{reminders.length > 0 ? <section className="notion-reminder-list project-reminder-list"><strong>{'\u9879\u76ee\u63d0\u9192'}</strong>{reminders.map((reminder) => <div key={reminder.id} className={'project-reminder-row ' + reminder.status}><span>{formatDateTime(reminder.scheduledAt)} / {reminder.title}</span><button className="danger-button compact" onClick={() => void onDeleteReminder(reminder)}>{commonUi.delete}</button></div>)}</section> : null}<ProjectNotebook project={project} sessions={sessions} journalEntries={journalEntries} onSaveJournalEntry={onSaveJournalEntry} /><section className="notion-block legacy-images"><details><summary>{'\u5386\u53f2\u56fe\u7247'}</summary>{images.length > 0 ? <div className="image-grid">{images.map((image) => <figure key={image.id}><img src={image.data} alt={image.caption || T.projectImages} />{image.caption ? <figcaption>{image.caption}</figcaption> : null}</figure>)}</div> : <p className="empty-text">{'\u6682\u65e0\u5386\u53f2\u56fe\u7247'}</p>}</details></section></div>;
 }
 
 function ProjectNotebook({ project, sessions, journalEntries, onSaveJournalEntry }: {
@@ -1076,7 +1115,7 @@ const exerciseUi = {
   subCategory: '\u7c7b\u578b',
 };
 
-function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growthRecords, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveExercisePlan, onSaveGrowthMetric, onDeleteGrowthMetric, onSaveGrowthRecord, onDeleteGrowthRecord, onSaveSession }: {
+function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growthRecords, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveExercisePlan, onDeleteExercisePlan, onSaveGrowthMetric, onDeleteGrowthMetric, onSaveGrowthRecord, onDeleteGrowthRecord, onSaveSession }: {
   projects: Project[];
   sessions: Session[];
   exercisePlans: ExercisePlan[];
@@ -1088,6 +1127,7 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
   onStartTimer: (project: Project) => Promise<void>;
   onManualSession: (preset: ManualPreset) => void;
   onSaveExercisePlan: (plan: ExercisePlan) => Promise<void>;
+  onDeleteExercisePlan: (plan: ExercisePlan) => Promise<void>;
   onSaveGrowthMetric: (metric: GrowthMetric) => Promise<void>;
   onDeleteGrowthMetric: (metric: GrowthMetric) => Promise<void>;
   onSaveGrowthRecord: (record: GrowthRecord) => Promise<void>;
@@ -1157,7 +1197,7 @@ function ExercisePage({ projects, sessions, exercisePlans, growthMetrics, growth
 
       <section className="panel exercise-plan-panel-wrap">
         <h2>{exerciseUi.plan}</h2>
-        <ExercisePlanPanel projects={exerciseProjects} plans={exercisePlans} onSavePlan={onSaveExercisePlan} />
+        <ExercisePlanPanel projects={exerciseProjects} plans={exercisePlans} onSavePlan={onSaveExercisePlan} onDeletePlan={onDeleteExercisePlan} />
       </section>
 
       <section className="panel exercise-growth-panel-wrap">
@@ -1272,7 +1312,7 @@ function ExerciseMonthCalendar({ sessions, onOpenProject }: { sessions: Session[
   return <div className="exercise-calendar exercise-month-calendar"><div className="calendar-toolbar"><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>{exerciseUi.previousMonth}</button><strong>{monthCursor.getFullYear()}{'\u5e74'}{monthCursor.getMonth() + 1}{'\u6708'}</strong><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>{exerciseUi.nextMonth}</button></div><div className="exercise-month-weekdays">{['\u5468\u4e00','\u5468\u4e8c','\u5468\u4e09','\u5468\u56db','\u5468\u4e94','\u5468\u516d','\u5468\u65e5'].map((day) => <span key={day}>{day}</span>)}</div><div className="exercise-month-grid">{cells.map((date, index) => { if (!date) return <span key={'empty-' + index} className="exercise-month-empty" />; const key = toDateKey(date); const daySessions = sessions.filter((session) => toDateKey(new Date(session.startTime)) === key); const marker = getExerciseDayMarker(daySessions); return <button key={key} className={'exercise-month-day ' + marker + (selectedDate === key ? ' selected' : '')} onClick={() => setSelectedDate(key)}><strong>{date.getDate()}</strong>{daySessions.length > 0 ? <span>{daySessions.length} {exerciseUi.times}</span> : <em>{exerciseUi.rest}</em>}</button>; })}</div><div className="selected-exercise-day"><h3>{selectedDate}</h3>{selectedSessions.length === 0 ? <p className="empty-text">{exerciseUi.dayEmpty}</p> : selectedSessions.map((session) => <button className="exercise-day-record" key={session.id} onClick={() => onOpenProject(session.projectId)}><strong>{session.projectNameSnapshot}</strong><span>{exerciseSubCategoryLabels[session.subCategory as ExerciseSubCategory] ?? session.subCategory} / {formatDuration(session.durationMinutes)}</span><em>{session.content || exerciseUi.noGoal}</em></button>)}</div></div>;
 }
 
-function ExercisePlanPanel({ projects, plans, onSavePlan }: { projects: Project[]; plans: ExercisePlan[]; onSavePlan: (plan: ExercisePlan) => Promise<void> }) {
+function ExercisePlanPanel({ projects, plans, onSavePlan, onDeletePlan }: { projects: Project[]; plans: ExercisePlan[]; onSavePlan: (plan: ExercisePlan) => Promise<void>; onDeletePlan: (plan: ExercisePlan) => Promise<void> }) {
   const [title, setTitle] = useState('');
   const [subCategory, setSubCategory] = useState<ExerciseSubCategory>('strength');
   const [projectId, setProjectId] = useState('');
@@ -1309,7 +1349,7 @@ function ExercisePlanPanel({ projects, plans, onSavePlan }: { projects: Project[
     setTitle(''); setProjectId(''); setNote('');
   };
 
-  return <div className="exercise-plan-panel"><div className="notification-row">{notificationEnabled ? <span className="status-pill active">{exerciseUi.notificationOn}</span> : <button className="secondary-button compact" onClick={requestNotification}>{exerciseUi.enableNotification}</button>}{duePlans.length > 0 ? <span className="warning-text">{exerciseUi.overduePrefix} {duePlans.length} {exerciseUi.overdueSuffix}</span> : null}</div><div className="exercise-plan-form"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={exerciseUi.planPlaceholder} /><SelectExerciseSubCategory value={subCategory} onChange={(value) => { setSubCategory(value); setProjectId(''); }} /><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{exerciseUi.relatedProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select><input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={exerciseUi.note} /><button className="primary-button" onClick={create}>{exerciseUi.addPlan}</button></div><div className="calendar-toolbar"><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>{exerciseUi.previousMonth}</button><strong>{monthCursor.getFullYear()}{'\u5e74'}{monthCursor.getMonth() + 1}{'\u6708'}</strong><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>{exerciseUi.nextMonth}</button></div><div className="exercise-plan-month">{buildMonthCells(monthCursor).map((date, index) => date ? <div key={toDateKey(date)} className="exercise-plan-day"><strong>{date.getDate()}</strong>{monthPlans.filter((plan) => toDateKey(new Date(plan.scheduledAt)) === toDateKey(date)).map((plan) => <div key={plan.id} className={'exercise-plan-item ' + plan.status}><span>{formatDateTime(plan.scheduledAt)} {plan.title}</span><small>{exerciseSubCategoryLabels[plan.subCategory]}</small>{plan.note ? <small>{plan.note}</small> : null}<div><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'done' })}>{exerciseUi.done}</button><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'skipped' })}>{exerciseUi.skipped}</button></div></div>)}</div> : <div key={'empty-' + index} className="exercise-plan-day empty" />)}</div></div>;
+  return <div className="exercise-plan-panel"><div className="notification-row">{notificationEnabled ? <span className="status-pill active">{exerciseUi.notificationOn}</span> : <button className="secondary-button compact" onClick={requestNotification}>{exerciseUi.enableNotification}</button>}{duePlans.length > 0 ? <span className="warning-text">{exerciseUi.overduePrefix} {duePlans.length} {exerciseUi.overdueSuffix}</span> : null}</div><div className="exercise-plan-form"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={exerciseUi.planPlaceholder} /><SelectExerciseSubCategory value={subCategory} onChange={(value) => { setSubCategory(value); setProjectId(''); }} /><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{exerciseUi.relatedProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select><input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={exerciseUi.note} /><button className="primary-button" onClick={create}>{exerciseUi.addPlan}</button></div><div className="calendar-toolbar"><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>{exerciseUi.previousMonth}</button><strong>{monthCursor.getFullYear()}{'\u5e74'}{monthCursor.getMonth() + 1}{'\u6708'}</strong><button className="secondary-button compact" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>{exerciseUi.nextMonth}</button></div><div className="exercise-plan-month">{buildMonthCells(monthCursor).map((date, index) => date ? <div key={toDateKey(date)} className="exercise-plan-day"><strong>{date.getDate()}</strong>{monthPlans.filter((plan) => toDateKey(new Date(plan.scheduledAt)) === toDateKey(date)).map((plan) => <div key={plan.id} className={'exercise-plan-item ' + plan.status}><span>{formatDateTime(plan.scheduledAt)} {plan.title}</span><small>{exerciseSubCategoryLabels[plan.subCategory]}</small>{plan.note ? <small>{plan.note}</small> : null}<div><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'done' })}>{exerciseUi.done}</button><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'skipped' })}>{exerciseUi.skipped}</button><button className="danger-button compact" onClick={() => onDeletePlan(plan)}>{commonUi.delete}</button></div></div>)}</div> : <div key={'empty-' + index} className="exercise-plan-day empty" />)}</div></div>;
 }
 
 function GrowthPanel({ metrics, records, onSaveMetric, onDeleteMetric, onSaveRecord, onDeleteRecord }: { metrics: GrowthMetric[]; records: GrowthRecord[]; onSaveMetric: (metric: GrowthMetric) => Promise<void>; onDeleteMetric: (metric: GrowthMetric) => Promise<void>; onSaveRecord: (record: GrowthRecord) => Promise<void>; onDeleteRecord: (record: GrowthRecord) => Promise<void> }) {
