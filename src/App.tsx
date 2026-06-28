@@ -1662,75 +1662,64 @@ function StudyProjectPage({ project, sessions, chapters, activeTimer, onBack, on
 
 function StudyChapterTable({ project, chapters, onSaveChapter, onDeleteChapter }: { project: Project; chapters: StudyChapter[]; onSaveChapter: (chapter: StudyChapter) => Promise<void>; onDeleteChapter: (chapter: StudyChapter) => Promise<void> }) {
   const [title, setTitle] = useState('');
-  const [newReminderAt, setNewReminderAt] = useState('');
-  const [newReminderNote, setNewReminderNote] = useState('');
-  const [notificationEnabled, setNotificationEnabled] = useState(() => typeof Notification !== 'undefined' && Notification.permission === 'granted');
-  const [notificationMessage, setNotificationMessage] = useState('');
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [selectedChapterId, setSelectedChapterId] = useState('');
+  const [reminderAt, setReminderAt] = useState('');
+  const [reminderNote, setReminderNote] = useState('');
+  const [message, setMessage] = useState('');
   const ordered = [...chapters].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const selectedChapter = ordered.find((chapter) => chapter.id === selectedChapterId) ?? ordered[0];
+
+  useEffect(() => {
+    if (!selectedChapterId && ordered[0]) setSelectedChapterId(ordered[0].id);
+    if (selectedChapterId && !ordered.some((chapter) => chapter.id === selectedChapterId)) setSelectedChapterId(ordered[0]?.id ?? '');
+  }, [ordered, selectedChapterId]);
+
+  useEffect(() => {
+    if (!selectedChapter) {
+      setReminderAt('');
+      setReminderNote('');
+      return;
+    }
+    setReminderAt(selectedChapter.reviewReminderAt ? toInputDateTime(selectedChapter.reviewReminderAt) : '');
+    setReminderNote(selectedChapter.reviewReminderNote ?? '');
+    setMessage('');
+  }, [selectedChapter?.id, selectedChapter?.reviewReminderAt, selectedChapter?.reviewReminderNote]);
+
   const create = async () => {
     if (!title.trim()) return;
     const timestamp = nowIso();
-    await onSaveChapter({
-      id: createId(),
-      projectId: project.id,
-      title: title.trim(),
-      status: 'notStarted',
-      reviewReminderAt: newReminderAt ? fromInputDateTime(newReminderAt) : undefined,
-      reviewReminderNote: newReminderNote.trim() || (newReminderAt ? project.name + ' / ' + title.trim() : undefined),
-      reviewReminderDone: newReminderAt ? false : undefined,
-      createdAt: timestamp,
-      updatedAt: timestamp
-    });
+    await onSaveChapter({ id: createId(), projectId: project.id, title: title.trim(), status: 'notStarted', createdAt: timestamp, updatedAt: timestamp });
     setTitle('');
-    setNewReminderAt('');
-    setNewReminderNote('');
-    setNotificationMessage(newReminderAt ? '\u7ae0\u8282\u548c\u590d\u4e60\u65f6\u95f4\u5df2\u4fdd\u5b58\u3002' : '');
   };
-  const requestNotification = async () => {
-    if (typeof Notification === 'undefined') {
-      setNotificationMessage('\u5f53\u524d\u6d4f\u89c8\u5668\u4e0d\u652f\u6301\u7cfb\u7edf\u901a\u77e5\uff0c\u4f46\u4ecd\u7136\u53ef\u4ee5\u7ed9\u7ae0\u8282\u8bbe\u7f6e\u590d\u4e60\u65f6\u95f4\u3002');
+
+  const saveReminder = async () => {
+    if (!selectedChapter) {
+      setMessage('\u8bf7\u5148\u65b0\u589e\u4e00\u4e2a\u77e5\u8bc6\u7ae0\u8282\uff0c\u518d\u8bbe\u7f6e\u5b66\u4e60\u63d0\u9192\u3002');
       return;
     }
-    if (Notification.permission === 'granted') {
-      setNotificationEnabled(true);
-      setNotificationMessage('\u5b66\u4e60\u63d0\u9192\u5df2\u5f00\u542f\uff0c\u5230\u70b9\u65f6\u5982\u679c\u9875\u9762\u6253\u5f00\u4f1a\u5f39\u51fa\u901a\u77e5\u3002');
+    if (!reminderAt) {
+      setMessage('\u8bf7\u9009\u62e9\u63d0\u9192\u65f6\u95f4\u3002');
       return;
     }
-    if (Notification.permission === 'denied') {
-      setNotificationMessage('\u6d4f\u89c8\u5668\u5df2\u7981\u6b62\u901a\u77e5\uff0c\u4f46\u4e0b\u9762\u7684\u63d0\u9192\u65f6\u95f4\u4ecd\u7136\u53ef\u4ee5\u4fdd\u5b58\u3002\u5982\u9700\u7cfb\u7edf\u5f39\u7a97\uff0c\u8bf7\u5728\u5730\u5740\u680f\u6743\u9650\u91cc\u5141\u8bb8\u901a\u77e5\u3002');
-      return;
-    }
-    try {
-      const result = await Notification.requestPermission();
-      const allowed = result === 'granted';
-      setNotificationEnabled(allowed);
-      setNotificationMessage(allowed ? '\u5b66\u4e60\u63d0\u9192\u5df2\u5f00\u542f\uff0c\u73b0\u5728\u53ef\u4ee5\u5728\u7ae0\u8282\u4e0b\u65b9\u8bbe\u7f6e\u5177\u4f53\u590d\u4e60\u65f6\u95f4\u3002' : '\u4f60\u6ca1\u6709\u5141\u8bb8\u901a\u77e5\uff0c\u4f46\u4ecd\u7136\u53ef\u4ee5\u4fdd\u5b58\u590d\u4e60\u65f6\u95f4\uff0c\u53ea\u662f\u4e0d\u4f1a\u5f39\u51fa\u7cfb\u7edf\u901a\u77e5\u3002');
-    } catch {
-      setNotificationMessage('\u65e0\u6cd5\u5f39\u51fa\u901a\u77e5\u6388\u6743\uff0c\u4f60\u4ecd\u7136\u53ef\u4ee5\u5148\u5728\u4e0b\u9762\u8bbe\u7f6e\u590d\u4e60\u65f6\u95f4\u3002');
-    }
+    await onSaveChapter({ ...selectedChapter, reviewReminderAt: fromInputDateTime(reminderAt), reviewReminderNote: reminderNote.trim() || project.name + ' / ' + selectedChapter.title, reviewReminderDone: false });
+    setMessage('\u5b66\u4e60\u63d0\u9192\u5df2\u4fdd\u5b58\u3002');
   };
-  return <div className="study-chapter-table"><div className="section-heading"><h3>{studyUi.hierarchy}</h3>{notificationEnabled ? <span className="status-pill active">{studyUi.reminderOn}</span> : <button className="secondary-button compact" onClick={requestNotification}>{studyUi.enableStudyReminder}</button>}</div>{notificationMessage ? <p className="study-notification-message">{notificationMessage}</p> : null}<div className="study-chapter-create-form"><label><span>{'\u77e5\u8bc6\u7ae0\u8282'}</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={studyUi.chapterPlaceholder} /></label><label><span>{studyUi.reminderTime}</span><input type="datetime-local" value={newReminderAt} onChange={(event) => setNewReminderAt(event.target.value)} /></label><label><span>{studyUi.reminderNote}</span><input value={newReminderNote} onChange={(event) => setNewReminderNote(event.target.value)} placeholder={project.name + ' / ' + (title.trim() || studyUi.chapterPlaceholder)} /></label><button className="secondary-button compact" onClick={create}>{studyUi.addChapter}</button></div>{ordered.length === 0 ? <p className="empty-text">{'\u8fd8\u6ca1\u6709\u77e5\u8bc6\u7ae0\u8282\uff0c\u53ef\u4ee5\u5728\u4e0a\u9762\u76f4\u63a5\u586b\u5199\u7ae0\u8282\u540d\u548c\u590d\u4e60\u65f6\u95f4\u3002'}</p> : <div className="study-chapter-list">{ordered.map((chapter) => <StudyChapterRow key={chapter.id} chapter={chapter} project={project} onSaveChapter={onSaveChapter} onDeleteChapter={onDeleteChapter} />)}</div>}</div>;
+
+  const clearReminder = async () => {
+    if (!selectedChapter) return;
+    await onSaveChapter({ ...selectedChapter, reviewReminderAt: undefined, reviewReminderNote: undefined, reviewReminderDone: undefined });
+    setReminderAt('');
+    setReminderNote('');
+    setMessage('\u5b66\u4e60\u63d0\u9192\u5df2\u6e05\u9664\u3002');
+  };
+
+  return <div className="study-chapter-table"><div className="section-heading"><h3>{studyUi.hierarchy}</h3><button className="secondary-button compact" onClick={() => setReminderOpen((value) => !value)}>{reminderOpen ? '\u6536\u8d77\u5b66\u4e60\u63d0\u9192' : studyUi.enableStudyReminder}</button></div><div className="study-chapter-create-simple"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={studyUi.chapterPlaceholder} /><button className="secondary-button compact" onClick={create}>{studyUi.addChapter}</button></div>{reminderOpen ? <div className="study-reminder-setup-panel"><label><span>{'\u9009\u62e9\u7ae0\u8282'}</span><select value={selectedChapter?.id ?? ''} onChange={(event) => setSelectedChapterId(event.target.value)} disabled={ordered.length === 0}>{ordered.length === 0 ? <option value="">{'\u8bf7\u5148\u65b0\u589e\u7ae0\u8282'}</option> : ordered.map((chapter) => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}</select></label><label><span>{studyUi.reminderTime}</span><input type="datetime-local" value={reminderAt} onChange={(event) => setReminderAt(event.target.value)} disabled={!selectedChapter} /></label><label><span>{studyUi.reminderNote}</span><input value={reminderNote} onChange={(event) => setReminderNote(event.target.value)} placeholder={selectedChapter ? project.name + ' / ' + selectedChapter.title : studyUi.reminderPlaceholder} disabled={!selectedChapter} /></label><div className="study-reminder-buttons"><button className="primary-button compact" onClick={saveReminder}>{studyUi.saveReminder}</button>{selectedChapter?.reviewReminderAt ? <button className="ghost-button compact" onClick={clearReminder}>{studyUi.clearReminder}</button> : null}{selectedChapter?.reviewReminderAt && !selectedChapter.reviewReminderDone ? <button className="ghost-button compact" onClick={() => onSaveChapter({ ...selectedChapter, reviewReminderDone: true })}>{studyUi.markReviewed}</button> : null}</div>{message ? <p className="study-notification-message">{message}</p> : null}</div> : null}{ordered.length === 0 ? <p className="empty-text">{studyUi.noChapters}</p> : <div className="study-chapter-list">{ordered.map((chapter) => <StudyChapterRow key={chapter.id} chapter={chapter} onSaveChapter={onSaveChapter} onDeleteChapter={onDeleteChapter} />)}</div>}</div>;
 }
 
-function StudyChapterRow({ chapter, project, onSaveChapter, onDeleteChapter }: { chapter: StudyChapter; project: Project; onSaveChapter: (chapter: StudyChapter) => Promise<void>; onDeleteChapter: (chapter: StudyChapter) => Promise<void> }) {
-  const [editingReminder, setEditingReminder] = useState(false);
-  const [reminderAt, setReminderAt] = useState(chapter.reviewReminderAt ? toInputDateTime(chapter.reviewReminderAt) : '');
-  const [reminderNote, setReminderNote] = useState(chapter.reviewReminderNote ?? '');
-  const [message, setMessage] = useState('');
-  useEffect(() => { setReminderAt(chapter.reviewReminderAt ? toInputDateTime(chapter.reviewReminderAt) : ''); setReminderNote(chapter.reviewReminderNote ?? ''); setMessage(''); }, [chapter.id, chapter.reviewReminderAt, chapter.reviewReminderNote]);
-  const saveReminder = async () => {
-    if (!reminderAt) { setMessage('\u8bf7\u5148\u9009\u62e9\u63d0\u9192\u65f6\u95f4'); return; }
-    await onSaveChapter({ ...chapter, reviewReminderAt: fromInputDateTime(reminderAt), reviewReminderNote: reminderNote.trim() || project.name + ' / ' + chapter.title, reviewReminderDone: false });
-    setEditingReminder(false);
-    setMessage('\u63d0\u9192\u5df2\u4fdd\u5b58');
-  };
-  const clearReminder = async () => {
-    await onSaveChapter({ ...chapter, reviewReminderAt: undefined, reviewReminderNote: undefined, reviewReminderDone: undefined });
-    setEditingReminder(false);
-    setMessage('\u63d0\u9192\u5df2\u6e05\u9664');
-  };
+function StudyChapterRow({ chapter, onSaveChapter, onDeleteChapter }: { chapter: StudyChapter; onSaveChapter: (chapter: StudyChapter) => Promise<void>; onDeleteChapter: (chapter: StudyChapter) => Promise<void> }) {
   const reminderSummary = chapter.reviewReminderAt ? formatDateTime(chapter.reviewReminderAt) + (chapter.reviewReminderNote ? ' / ' + chapter.reviewReminderNote : '') : '\u8fd8\u6ca1\u6709\u590d\u4e60\u63d0\u9192';
-  return <div className="study-chapter-row"><div className="study-chapter-main"><div><strong>{chapter.title}</strong><span>{reminderSummary}</span></div><div className="study-chapter-actions"><button className={chapter.status === 'completed' ? 'status-pill active' : 'status-pill'} onClick={() => onSaveChapter({ ...chapter, status: chapter.status === 'completed' ? 'notStarted' : 'completed' })}>{chapter.status === 'completed' ? studyUi.completed : studyUi.notStarted}</button><button className="secondary-button compact" onClick={() => setEditingReminder((value) => !value)}>{studyUi.reviewReminder}</button><button className="danger-button compact" onClick={() => void onDeleteChapter(chapter)}>{commonUi.delete}</button></div></div>{editingReminder ? <div className="study-chapter-reminder-editor"><label><span>{studyUi.reminderTime}</span><input className="study-reminder-time-input" type="datetime-local" value={reminderAt} onChange={(event) => setReminderAt(event.target.value)} /></label><label><span>{studyUi.reminderNote}</span><input value={reminderNote} onChange={(event) => setReminderNote(event.target.value)} placeholder={studyUi.reminderPlaceholder} /></label><div className="study-reminder-buttons"><button className="primary-button compact" onClick={saveReminder}>{studyUi.saveReminder}</button>{chapter.reviewReminderAt ? <button className="ghost-button compact" onClick={clearReminder}>{studyUi.clearReminder}</button> : null}{chapter.reviewReminderAt && !chapter.reviewReminderDone ? <button className="ghost-button compact" onClick={() => onSaveChapter({ ...chapter, reviewReminderDone: true })}>{studyUi.markReviewed}</button> : null}</div>{message ? <p className="muted">{message}</p> : null}</div> : null}</div>;
+  return <div className="study-chapter-row"><div className="study-chapter-main"><div><strong>{chapter.title}</strong><span>{reminderSummary}</span></div><div className="study-chapter-actions"><button className={chapter.status === 'completed' ? 'status-pill active' : 'status-pill'} onClick={() => onSaveChapter({ ...chapter, status: chapter.status === 'completed' ? 'notStarted' : 'completed' })}>{chapter.status === 'completed' ? studyUi.completed : studyUi.notStarted}</button><button className="danger-button compact" onClick={() => void onDeleteChapter(chapter)}>{commonUi.delete}</button></div></div></div>;
 }
 
 function StudyChapterSelector({ chapters, selectedIds, onChange }: { chapters: StudyChapter[]; selectedIds: string[]; onChange: (ids: string[]) => void }) {
