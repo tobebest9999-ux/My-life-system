@@ -94,6 +94,15 @@ export interface StudyLibraryItem {
   updatedAt: string;
 }
 
+export interface StudyLibraryPlan {
+  id: string;
+  type: StudyLibraryType;
+  date: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ExercisePlan {
   id: string;
   title: string;

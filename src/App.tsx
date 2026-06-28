@@ -16,6 +16,7 @@ import type {
   ExerciseSubCategory,
   StudyChapter,
   StudyLibraryItem,
+  StudyLibraryPlan,
   StudyLibraryType,
   StudySubCategory,
   GrowthMetric,
@@ -209,6 +210,7 @@ function App() {
   const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>([]);
   const [studyChapters, setStudyChapters] = useState<StudyChapter[]>([]);
   const [studyLibraryItems, setStudyLibraryItems] = useState<StudyLibraryItem[]>([]);
+  const [studyLibraryPlans, setStudyLibraryPlans] = useState<StudyLibraryPlan[]>([]);
   const [images, setImages] = useState<ProjectImage[]>([]);
   const [journalEntries, setJournalEntries] = useState<ProjectJournalEntry[]>([]);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
@@ -218,7 +220,7 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   const reload = async () => {
-    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedProjectReminders, storedExercisePlans, storedGrowthMetrics, storedGrowthRecords, storedStudyChapters, storedStudyLibraryItems, storedTimer] = await Promise.all([
+    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedProjectReminders, storedExercisePlans, storedGrowthMetrics, storedGrowthRecords, storedStudyChapters, storedStudyLibraryItems, storedStudyLibraryPlans, storedTimer] = await Promise.all([
       storage.getProjects(),
       storage.getSessions(),
       storage.getWeeklyPlans(),
@@ -230,6 +232,7 @@ function App() {
       storage.getGrowthRecords(),
       storage.getStudyChapters(),
       storage.getStudyLibraryItems(),
+      storage.getStudyLibraryPlans(),
       storage.getActiveTimer(),
     ]);
     setProjects(sortByCreated(storedProjects));
@@ -243,6 +246,7 @@ function App() {
     setGrowthRecords(sortByCreated(storedGrowthRecords));
     setStudyChapters(sortByCreated(storedStudyChapters));
     setStudyLibraryItems(sortByCreated(storedStudyLibraryItems));
+    setStudyLibraryPlans(sortByCreated(storedStudyLibraryPlans));
     setActiveTimer(storedTimer);
     setLoading(false);
   };
@@ -459,6 +463,11 @@ function App() {
     await reload();
   };
 
+  const saveStudyLibraryPlan = async (plan: StudyLibraryPlan) => {
+    await storage.saveStudyLibraryPlan({ ...plan, updatedAt: nowIso() });
+    await reload();
+  };
+
   const deleteGrowthRecord = async (record: GrowthRecord) => {
     const confirmed = window.confirm(commonUi.confirmDeleteGrowthRecord);
     if (!confirmed) return;
@@ -579,6 +588,7 @@ function App() {
             sessions={sessions}
             studyChapters={studyChapters}
             studyLibraryItems={studyLibraryItems}
+            studyLibraryPlans={studyLibraryPlans}
             activeTimer={activeTimer}
             onCreateProject={createProject}
             onDeleteProject={deleteProject}
@@ -588,6 +598,7 @@ function App() {
             onDeleteChapter={deleteStudyChapter}
             onSaveLibraryItem={saveStudyLibraryItem}
             onDeleteLibraryItem={deleteStudyLibraryItem}
+            onSaveLibraryPlan={saveStudyLibraryPlan}
           />
         ) : null}
         {!loading && page === 'projects' ? (
@@ -1538,11 +1549,12 @@ const studyUi = {
   reminderPlaceholder: '\u4f8b\u5982\uff1a6\u670829\u65e5\u590d\u4e60\u94fe\u8868',
 };
 
-function StudyPage({ projects, sessions, studyChapters, studyLibraryItems, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveChapter, onDeleteChapter, onSaveLibraryItem, onDeleteLibraryItem }: {
+function StudyPage({ projects, sessions, studyChapters, studyLibraryItems, studyLibraryPlans, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveChapter, onDeleteChapter, onSaveLibraryItem, onDeleteLibraryItem, onSaveLibraryPlan }: {
   projects: Project[];
   sessions: Session[];
   studyChapters: StudyChapter[];
   studyLibraryItems: StudyLibraryItem[];
+  studyLibraryPlans: StudyLibraryPlan[];
   activeTimer: ActiveTimer | null;
   onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
   onDeleteProject: (project: Project) => Promise<void>;
@@ -1552,6 +1564,7 @@ function StudyPage({ projects, sessions, studyChapters, studyLibraryItems, activ
   onDeleteChapter: (chapter: StudyChapter) => Promise<void>;
   onSaveLibraryItem: (item: StudyLibraryItem) => Promise<void>;
   onDeleteLibraryItem: (item: StudyLibraryItem) => Promise<void>;
+  onSaveLibraryPlan: (plan: StudyLibraryPlan) => Promise<void>;
 }) {
   const studyProjects = projects.filter((project) => project.mainCategory === 'study');
   const studySessions = sessions.filter((session) => session.mainCategory === 'study');
@@ -1595,7 +1608,7 @@ function StudyPage({ projects, sessions, studyChapters, studyLibraryItems, activ
     return <StudyCategoryBoard category={category} projects={studyProjects.filter((project) => project.subCategory === category)} sessions={studySessions} activeTimer={activeTimer} onBack={() => setView('home')} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onOpenProject={openProject} />;
   }
   if (view === 'library') {
-    return <StudyLibraryDatabasePage type={libraryType} projects={studyProjects} items={studyLibraryItems.filter((item) => item.type === libraryType)} onBack={() => setView('home')} onOpenItem={openLibraryItem} onSaveItem={onSaveLibraryItem} onDeleteItem={onDeleteLibraryItem} />;
+    return <StudyLibraryDatabasePage type={libraryType} projects={studyProjects} items={studyLibraryItems.filter((item) => item.type === libraryType)} plans={studyLibraryPlans.filter((plan) => plan.type === libraryType)} onBack={() => setView('home')} onOpenItem={openLibraryItem} onSaveItem={onSaveLibraryItem} onDeleteItem={onDeleteLibraryItem} onSavePlan={onSaveLibraryPlan} />;
   }
   if (view === 'libraryItem' && selectedLibraryItem) {
     return <StudyLibraryPaperPage item={selectedLibraryItem} project={studyProjects.find((project) => project.id === selectedLibraryItem.projectId)} onBack={() => setView('library')} onSaveItem={onSaveLibraryItem} onDeleteItem={onDeleteLibraryItem} />;
@@ -1772,7 +1785,47 @@ function StudyLibraryHomeCards({ projects, items, onOpenLibrary }: { projects: P
   return <div className="study-library-home"><div className="section-heading"><h2>{studyUi.libraryDatabase}</h2></div><div className="study-library-entry-grid">{configs.map((config) => { const count = items.filter((item) => item.type === config.type).length; return <button key={config.type} className={'study-library-entry-card ' + config.type} onClick={() => onOpenLibrary(config.type)}><div><strong>{config.title}</strong><span>{count} {studyUi.recordUnit}</span></div><p>{config.desc}</p><footer><span>{projects.length} {studyUi.projectUnit}</span><em>{studyUi.openLibrary}</em></footer></button>; })}</div></div>;
 }
 
-function StudyLibraryDatabasePage({ type, projects, items, onBack, onOpenItem, onSaveItem, onDeleteItem }: { type: StudyLibraryType; projects: Project[]; items: StudyLibraryItem[]; onBack: () => void; onOpenItem: (id: string) => void; onSaveItem: (item: StudyLibraryItem) => Promise<void>; onDeleteItem: (item: StudyLibraryItem) => Promise<void> }) {
+
+function StudyLibraryDailyPlan({ type, plans, onSavePlan }: { type: StudyLibraryType; plans: StudyLibraryPlan[]; onSavePlan: (plan: StudyLibraryPlan) => Promise<void> }) {
+  const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
+  const [content, setContent] = useState('');
+  const [saveState, setSaveState] = useState('\u5df2\u6253\u5f00\u4eca\u5929');
+  const currentPlan = plans.find((plan) => plan.date === selectedDate);
+  const label = type === 'mistake' ? studyUi.mistakes : studyUi.notes;
+
+  useEffect(() => {
+    setContent(currentPlan?.content ?? '');
+    setSaveState(currentPlan ? '\u5df2\u8f7d\u5165' : '\u8fd9\u4e00\u5929\u8fd8\u662f\u7a7a\u767d');
+  }, [currentPlan?.id, currentPlan?.content, selectedDate]);
+
+  useEffect(() => {
+    const existingContent = currentPlan?.content ?? '';
+    if (content === existingContent) return;
+    setSaveState('\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58...');
+    const timer = window.setTimeout(() => {
+      const timestamp = nowIso();
+      void onSavePlan({
+        id: currentPlan?.id ?? createId(),
+        type,
+        date: selectedDate,
+        content,
+        createdAt: currentPlan?.createdAt ?? timestamp,
+        updatedAt: timestamp
+      }).then(() => setSaveState('\u5df2\u81ea\u52a8\u4fdd\u5b58'));
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [content, currentPlan?.content, currentPlan?.createdAt, currentPlan?.id, onSavePlan, selectedDate, type]);
+
+  const moveDay = (days: number) => {
+    const next = new Date(selectedDate + 'T00:00:00');
+    next.setDate(next.getDate() + days);
+    setSelectedDate(toDateKey(next));
+  };
+
+  return <section className="study-library-plan-paper"><div className="study-plan-paper-top"><div><span>{label} {'\u6bcf\u65e5\u8ba1\u5212'}</span><strong>{formatDate(selectedDate)}</strong></div><div className="study-plan-date-tools"><button className="ghost-button compact" onClick={() => moveDay(-1)}>{'\u524d\u4e00\u5929'}</button><button className="secondary-button compact" onClick={() => setSelectedDate(toDateKey(new Date()))}>{'\u4eca\u5929'}</button><button className="ghost-button compact" onClick={() => moveDay(1)}>{'\u540e\u4e00\u5929'}</button><label><span>{'\u9009\u62e9\u65e5\u671f'}</span><input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value || toDateKey(new Date()))} /></label></div></div><textarea className="study-plan-paper-textarea" value={content} onChange={(event) => setContent(event.target.value)} placeholder={'\u5728\u8fd9\u5f20\u767d\u7eb8\u4e0a\u5199\u4e0b' + label + '\u4eca\u5929\u7684\u8ba1\u5212\u3002\u660e\u5929\u4f1a\u81ea\u52a8\u6253\u5f00\u65b0\u7684\u4e00\u9875\uff0c\u4f60\u4e5f\u53ef\u4ee5\u63d0\u524d\u5207\u5230\u660e\u5929\u5199\u3002'} /><div className="study-plan-save-state">{saveState}</div></section>;
+}
+
+function StudyLibraryDatabasePage({ type, projects, items, plans, onBack, onOpenItem, onSaveItem, onDeleteItem, onSavePlan }: { type: StudyLibraryType; projects: Project[]; items: StudyLibraryItem[]; plans: StudyLibraryPlan[]; onBack: () => void; onOpenItem: (id: string) => void; onSaveItem: (item: StudyLibraryItem) => Promise<void>; onDeleteItem: (item: StudyLibraryItem) => Promise<void>; onSavePlan: (plan: StudyLibraryPlan) => Promise<void> }) {
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [recordedAt, setRecordedAt] = useState(toInputDateTime());
@@ -1787,7 +1840,7 @@ function StudyLibraryDatabasePage({ type, projects, items, onBack, onOpenItem, o
     onOpenItem(item.id);
   };
   const orderedItems = [...items].sort((a, b) => (b.recordedAt ?? b.createdAt).localeCompare(a.recordedAt ?? a.createdAt));
-  return <div className="notion-page study-library-database-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{studyUi.pageTitle} / {label}</div><h2>{label}</h2><p>{'\u8fd9\u91cc\u662f\u72ec\u7acb\u8d44\u6599\u5e93\u3002\u5148\u65b0\u5efa\u6761\u76ee\uff0c\u518d\u70b9\u51fb\u8fdb\u5165\u767d\u7eb8\u9875\u7f16\u8f91\u5185\u5bb9\u548c\u56fe\u7247\u3002'}</p></section><section className="panel study-library-database-panel"><div className="study-library-toolbar"><select value={projectId} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{studySubCategoryLabels[project.subCategory as StudySubCategory]} / {project.name}</option>)}</select><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={studyUi.title} /><input type="datetime-local" value={recordedAt} onChange={(event) => setRecordedAt(event.target.value)} /><button className="primary-button" onClick={create}>{studyUi.newItem}</button></div>{projects.length === 0 ? <p className="empty-text">{studyUi.noProject}</p> : orderedItems.length === 0 ? <p className="empty-text">{studyUi.noLibraryItem}</p> : <div className="study-library-table"><div className="study-library-table-head"><span>{studyUi.title}</span><span>{studyUi.relatedProject}</span><span>{studyUi.recordTime}</span><span>{studyUi.image}</span><span>{commonUi.action}</span></div>{orderedItems.map((item) => { const project = projects.find((candidate) => candidate.id === item.projectId); return <div key={item.id} className="study-library-table-row" role="button" tabIndex={0} onClick={() => onOpenItem(item.id)} onKeyDown={(event) => { if (event.key === 'Enter') onOpenItem(item.id); }}><strong>{item.title}</strong><span>{project ? studySubCategoryLabels[project.subCategory as StudySubCategory] + ' / ' + project.name : studyUi.empty}</span><span>{formatDateTime(item.recordedAt ?? item.createdAt)}</span><span>{item.imageData || item.imageUrl ? studyUi.image : studyUi.empty}</span><em><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteItem(item); }}>{commonUi.delete}</button></em></div>; })}</div>}</section></div>;
+  return <div className="notion-page study-library-database-page"><StudyLibraryDailyPlan type={type} plans={plans} onSavePlan={onSavePlan} /><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{studyUi.pageTitle} / {label}</div><h2>{label}</h2><p>{'\u8fd9\u91cc\u662f\u72ec\u7acb\u8d44\u6599\u5e93\u3002\u5148\u65b0\u5efa\u6761\u76ee\uff0c\u518d\u70b9\u51fb\u8fdb\u5165\u767d\u7eb8\u9875\u7f16\u8f91\u5185\u5bb9\u548c\u56fe\u7247\u3002'}</p></section><section className="panel study-library-database-panel"><div className="study-library-toolbar"><select value={projectId} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{studySubCategoryLabels[project.subCategory as StudySubCategory]} / {project.name}</option>)}</select><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={studyUi.title} /><input type="datetime-local" value={recordedAt} onChange={(event) => setRecordedAt(event.target.value)} /><button className="primary-button" onClick={create}>{studyUi.newItem}</button></div>{projects.length === 0 ? <p className="empty-text">{studyUi.noProject}</p> : orderedItems.length === 0 ? <p className="empty-text">{studyUi.noLibraryItem}</p> : <div className="study-library-table"><div className="study-library-table-head"><span>{studyUi.title}</span><span>{studyUi.relatedProject}</span><span>{studyUi.recordTime}</span><span>{studyUi.image}</span><span>{commonUi.action}</span></div>{orderedItems.map((item) => { const project = projects.find((candidate) => candidate.id === item.projectId); return <div key={item.id} className="study-library-table-row" role="button" tabIndex={0} onClick={() => onOpenItem(item.id)} onKeyDown={(event) => { if (event.key === 'Enter') onOpenItem(item.id); }}><strong>{item.title}</strong><span>{project ? studySubCategoryLabels[project.subCategory as StudySubCategory] + ' / ' + project.name : studyUi.empty}</span><span>{formatDateTime(item.recordedAt ?? item.createdAt)}</span><span>{item.imageData || item.imageUrl ? studyUi.image : studyUi.empty}</span><em><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteItem(item); }}>{commonUi.delete}</button></em></div>; })}</div>}</section></div>;
 }
 
 function StudyLibraryPaperPage({ item, project, onBack, onSaveItem, onDeleteItem }: { item: StudyLibraryItem; project?: Project; onBack: () => void; onSaveItem: (item: StudyLibraryItem) => Promise<void>; onDeleteItem: (item: StudyLibraryItem) => Promise<void> }) {

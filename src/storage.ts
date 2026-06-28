@@ -1,9 +1,9 @@
-import type { ActiveTimer, ExercisePlan, GrowthMetric, GrowthRecord, Project, ProjectImage, ProjectJournalEntry, ProjectReminder, Session, StudyChapter, StudyLibraryItem, WeeklyPlan } from './types';
+import type { ActiveTimer, ExercisePlan, GrowthMetric, GrowthRecord, Project, ProjectImage, ProjectJournalEntry, ProjectReminder, Session, StudyChapter, StudyLibraryItem, StudyLibraryPlan, WeeklyPlan } from './types';
 
-type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'projectReminders' | 'exercisePlans' | 'growthMetrics' | 'growthRecords' | 'studyChapters' | 'studyLibraryItems' | 'activeTimer';
+type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'projectReminders' | 'exercisePlans' | 'growthMetrics' | 'growthRecords' | 'studyChapters' | 'studyLibraryItems' | 'studyLibraryPlans' | 'activeTimer';
 
 const DB_NAME = 'personal-management-system';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -64,6 +64,11 @@ const openDatabase = () => {
         const store = db.createObjectStore('studyLibraryItems', { keyPath: 'id' });
         store.createIndex('projectId', 'projectId');
         store.createIndex('type', 'type');
+      }
+      if (!db.objectStoreNames.contains('studyLibraryPlans')) {
+        const store = db.createObjectStore('studyLibraryPlans', { keyPath: 'id' });
+        store.createIndex('type', 'type');
+        store.createIndex('date', 'date');
       }
       if (!db.objectStoreNames.contains('activeTimer')) {
         db.createObjectStore('activeTimer', { keyPath: 'id' });
@@ -136,6 +141,8 @@ export const storage = {
   getStudyLibraryItems: () => getAll<StudyLibraryItem>('studyLibraryItems'),
   saveStudyLibraryItem: (item: StudyLibraryItem) => put('studyLibraryItems', item),
   deleteStudyLibraryItem: (id: string) => remove('studyLibraryItems', id),
+  getStudyLibraryPlans: () => getAll<StudyLibraryPlan>('studyLibraryPlans'),
+  saveStudyLibraryPlan: (plan: StudyLibraryPlan) => put('studyLibraryPlans', plan),
   getActiveTimer: async () => {
     const timers = await getAll<ActiveTimer>('activeTimer');
     return timers[0] ?? null;
