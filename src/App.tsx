@@ -171,6 +171,7 @@ const commonUi = {
   confirmDeleteMetricEnd: '\u300d\u5417\uff1f\u8fd9\u4e2a\u6210\u957f\u9879\u4e0b\u9762\u7684\u8bb0\u5f55\u4e5f\u4f1a\u4e00\u8d77\u5220\u9664\u3002',
   confirmDeleteGrowthRecord: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u6210\u957f\u8bb0\u5f55\u5417\uff1f',
   confirmDeleteReminder: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u63d0\u9192\u5417\uff1f',
+  confirmDeleteWeeklyPlan: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u5468\u8ba1\u5212\u5417\uff1f',
   noExerciseData: '\u6682\u65e0\u8fd0\u52a8\u8bb0\u5f55',
 };
 
@@ -179,11 +180,15 @@ function sortByCreated<TItem extends { createdAt: string }>(items: TItem[]) {
 }
 
 function isLegacyEntertainmentReminder(plan: WeeklyPlan) {
+  const looksLikeReminderTitle = /^\u8fdb\u884c\s*/.test(plan.title.trim());
   return plan.mainCategory === 'entertainment'
     && Boolean(plan.projectId)
     && Boolean(plan.deadline)
+    && !plan.dateRangeStart
+    && !plan.dateRangeEnd
     && plan.targetType === 'completion'
-    && plan.title.trim().startsWith('\u8fdb\u884c ');
+    && typeof plan.targetValue !== 'number'
+    && looksLikeReminderTitle;
 }
 
 function App() {
@@ -374,6 +379,13 @@ function App() {
     await reload();
   };
 
+  const deletePlan = async (plan: WeeklyPlan) => {
+    const confirmed = window.confirm(commonUi.confirmDeleteWeeklyPlan);
+    if (!confirmed) return;
+    await storage.deleteWeeklyPlan(plan.id);
+    await reload();
+  };
+
   const saveProjectReminder = async (reminder: ProjectReminder) => {
     await storage.saveProjectReminder({ ...reminder, updatedAt: nowIso() });
     await reload();
@@ -479,6 +491,7 @@ function App() {
             onEndTimer={() => setDialog('endTimer')}
             onManualSession={() => openManual()}
             onSavePlan={savePlan}
+            onDeletePlan={deletePlan}
           />
         ) : null}
         {!loading && page === 'entertainment' ? (
@@ -536,7 +549,7 @@ function App() {
   );
 }
 
-function DashboardPage({ projects, sessions, plans, activeTimer, onQuickStart, onEndTimer, onManualSession, onSavePlan }: {
+function DashboardPage({ projects, sessions, plans, activeTimer, onQuickStart, onEndTimer, onManualSession, onSavePlan, onDeletePlan }: {
   projects: Project[];
   sessions: Session[];
   plans: WeeklyPlan[];
@@ -545,6 +558,7 @@ function DashboardPage({ projects, sessions, plans, activeTimer, onQuickStart, o
   onEndTimer: () => void;
   onManualSession: () => void;
   onSavePlan: (plan: WeeklyPlan) => Promise<void>;
+  onDeletePlan: (plan: WeeklyPlan) => Promise<void>;
 }) {
   const totals = useMemo(() => summarizeByMainCategory(sessions), [sessions]);
   const suggestions = useMemo(() => generateDashboardSuggestions(sessions, plans), [sessions, plans]);
@@ -565,7 +579,7 @@ function DashboardPage({ projects, sessions, plans, activeTimer, onQuickStart, o
         <h2>{T.timeDistribution}</h2>
         <PieTimeDistribution totals={totals} />
       </section>
-      <section className="panel sketch-half-row"><WeeklyPlanPanel projects={projects} plans={plans} onSavePlan={onSavePlan} /></section>
+      <section className="panel sketch-half-row"><WeeklyPlanPanel projects={projects} plans={plans} onSavePlan={onSavePlan} onDeletePlan={onDeletePlan} /></section>
       <section className="panel sketch-full-row">
         <h2>{T.recentRecords}</h2>
         {sessions.length === 0 ? <p className="empty-text">{T.noRecords}</p> : <SessionList sessions={sessions.slice(0, 6)} />}
@@ -720,10 +734,10 @@ function ManualSessionDialog({ preset, projects, onClose, onCreateProject, onSav
   return <Dialog title={T.manualSession} onClose={onClose}><div className="form-grid"><SelectMainCategory value={mainCategory} onChange={changeCategory} /><SelectSubCategory mainCategory={mainCategory} value={subCategory} onChange={setSubCategory} /><label><span>{T.startTime}</span><input type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label><label><span>{T.endTime}</span><input type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label><label className="full-width"><span>{T.project}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{T.selectProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="full-width"><span>{T.createProject}</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={T.projectPlaceholder} /></label></div><TextArea label={contentLabel} value={content} onChange={setContent} /><TextArea label={T.feeling} value={feelings} onChange={setFeelings} /><SessionAttachmentPicker attachments={attachments} onChange={setAttachments} />{error ? <p className="error-text">{error}</p> : null}<DialogActions onCancel={onClose} actionLabel={T.saveRecord} onAction={submit} /></Dialog>;
 }
 
-function WeeklyPlanPanel({ projects, plans, onSavePlan }: { projects: Project[]; plans: WeeklyPlan[]; onSavePlan: (plan: WeeklyPlan) => Promise<void> }) {
+function WeeklyPlanPanel({ projects, plans, onSavePlan, onDeletePlan }: { projects: Project[]; plans: WeeklyPlan[]; onSavePlan: (plan: WeeklyPlan) => Promise<void>; onDeletePlan: (plan: WeeklyPlan) => Promise<void> }) {
   const [creating, setCreating] = useState(false);
   const effectivePlans = plans.map((plan) => ({ ...plan, status: getEffectivePlanStatus(plan) }));
-  return <div><div className="section-heading"><h2>{T.weeklyPlans}</h2><button className="primary-button compact" onClick={() => setCreating(!creating)}>{T.newPlan}</button></div>{creating ? <WeeklyPlanForm projects={projects} onCancel={() => setCreating(false)} onCreate={async (plan) => { await onSavePlan(plan); setCreating(false); }} /> : null}{effectivePlans.length === 0 ? <p className="empty-text">{T.noPlan}</p> : <div className="plan-list">{effectivePlans.map((plan) => <PlanRow key={plan.id} plan={plan} projects={projects} onSavePlan={onSavePlan} />)}</div>}</div>;
+  return <div><div className="section-heading"><h2>{T.weeklyPlans}</h2><button className="primary-button compact" onClick={() => setCreating(!creating)}>{T.newPlan}</button></div>{creating ? <WeeklyPlanForm projects={projects} onCancel={() => setCreating(false)} onCreate={async (plan) => { await onSavePlan(plan); setCreating(false); }} /> : null}{effectivePlans.length === 0 ? <p className="empty-text">{T.noPlan}</p> : <div className="plan-list">{effectivePlans.map((plan) => <PlanRow key={plan.id} plan={plan} projects={projects} onSavePlan={onSavePlan} onDeletePlan={onDeletePlan} />)}</div>}</div>;
 }
 
 function WeeklyPlanForm({ projects, onCancel, onCreate }: { projects: Project[]; onCancel: () => void; onCreate: (plan: WeeklyPlan) => Promise<void> }) {
@@ -745,10 +759,10 @@ function WeeklyPlanForm({ projects, onCancel, onCreate }: { projects: Project[];
   return <div className="inline-form"><div className="form-grid"><label className="full-width"><span>{T.planTitle}</span><input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label><span>{T.relatedCategory}</span><select value={mainCategory} onChange={(event) => setMainCategory(event.target.value as MainCategory | '')}><option value="">{T.noRelatedCategory}</option>{mainCategoryOptions.map((category) => <option key={category} value={category}>{mainCategoryLabels[category]}</option>)}</select></label><label><span>{T.relatedProject}</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">{T.noRelatedProject}</option>{available.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label><span>{T.targetType}</span><select value={targetType} onChange={(event) => setTargetType(event.target.value as PlanTargetType)}>{Object.entries(planTargetLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label><span>{T.targetValue}</span><input type="number" value={targetValue} onChange={(event) => setTargetValue(event.target.value)} /></label><label><span>{T.currentProgress}</span><input type="number" value={currentProgress} onChange={(event) => setCurrentProgress(event.target.value)} /></label><label><span>{T.deadline}</span><input type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label></div>{error ? <p className="error-text">{error}</p> : null}<DialogActions onCancel={onCancel} actionLabel={T.savePlan} onAction={submit} /></div>;
 }
 
-function PlanRow({ plan, projects, onSavePlan }: { plan: WeeklyPlan; projects: Project[]; onSavePlan: (plan: WeeklyPlan) => Promise<void> }) {
+function PlanRow({ plan, projects, onSavePlan, onDeletePlan }: { plan: WeeklyPlan; projects: Project[]; onSavePlan: (plan: WeeklyPlan) => Promise<void>; onDeletePlan: (plan: WeeklyPlan) => Promise<void> }) {
   const [progress, setProgress] = useState(String(plan.currentProgress));
   const project = projects.find((item) => item.id === plan.projectId);
-  return <div className="plan-row"><div><div className="plan-title">{plan.title}</div><div className="meta-line">{plan.mainCategory ? mainCategoryLabels[plan.mainCategory] : T.noRelatedCategory}{project ? ' / ' + project.name : ''}{plan.deadline ? ' / ' + T.deadline + ' ' + formatDate(plan.deadline) : ''}</div></div><div className="plan-controls"><span className={'status-pill ' + plan.status}>{planStatusLabels[plan.status]}</span><input aria-label={T.currentProgress} type="number" min="0" value={progress} onChange={(event) => setProgress(event.target.value)} /><button className="secondary-button compact" onClick={() => onSavePlan({ ...plan, currentProgress: Number(progress || 0) })}>{T.updateProgress}</button><button className="secondary-button compact" onClick={() => onSavePlan({ ...plan, status: 'completed' })}>{T.markCompleted}</button><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'skipped' })}>{T.skip}</button></div></div>;
+  return <div className="plan-row"><div><div className="plan-title">{plan.title}</div><div className="meta-line">{plan.mainCategory ? mainCategoryLabels[plan.mainCategory] : T.noRelatedCategory}{project ? ' / ' + project.name : ''}{plan.deadline ? ' / ' + T.deadline + ' ' + formatDate(plan.deadline) : ''}</div></div><div className="plan-controls"><span className={'status-pill ' + plan.status}>{planStatusLabels[plan.status]}</span><input aria-label={T.currentProgress} type="number" min="0" value={progress} onChange={(event) => setProgress(event.target.value)} /><button className="secondary-button compact" onClick={() => onSavePlan({ ...plan, currentProgress: Number(progress || 0) })}>{T.updateProgress}</button><button className="secondary-button compact" onClick={() => onSavePlan({ ...plan, status: 'completed' })}>{T.markCompleted}</button><button className="ghost-button compact" onClick={() => onSavePlan({ ...plan, status: 'skipped' })}>{T.skip}</button><button className="danger-button compact" onClick={() => onDeletePlan(plan)}>{commonUi.delete}</button></div></div>;
 }
 
 function EntertainmentPage({ projects, sessions, images, journalEntries, reminders, activeTimer, onCreateProject, onUpdateProject, onDeleteProject, onStartTimer, onManualSession, onAddImage, onSaveJournalEntry, onSaveReminder, onDeleteReminder }: {
