@@ -74,6 +74,9 @@ export interface StudyChapter {
   projectId: string;
   title: string;
   status: StudyChapterStatus;
+  reviewReminderAt?: string;
+  reviewReminderNote?: string;
+  reviewReminderDone?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -84,6 +87,7 @@ export interface StudyLibraryItem {
   projectId: string;
   title: string;
   content: string;
+  recordedAt?: string;
   imageData?: string;
   imageUrl?: string;
   createdAt: string;
