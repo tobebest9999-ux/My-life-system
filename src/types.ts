@@ -6,9 +6,15 @@ export type ExerciseSubCategory = 'strength' | 'cardio' | 'other';
 
 export type StudySubCategory = 'computer' | 'math' | 'english' | 'other';
 
+export type ProjectSubCategory = 'gameDemo' | 'development' | 'creation';
+
 export type StudyChapterStatus = 'notStarted' | 'completed';
 
 export type StudyLibraryType = 'mistake' | 'note';
+
+export type ProjectTaskStatus = 'active' | 'completed';
+
+export type ProjectLibraryAssetType = 'document' | 'image' | 'code' | 'link' | 'other';
 
 export type ProjectStatus =
   | 'wishlist'
@@ -99,6 +105,27 @@ export interface StudyLibraryPlan {
   type: StudyLibraryType;
   date: string;
   content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectTask {
+  id: string;
+  projectId: string;
+  date: string;
+  title: string;
+  status: ProjectTaskStatus;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectLibraryAsset {
+  id: string;
+  projectId: string;
+  name: string;
+  assetType: ProjectLibraryAssetType;
+  note: string;
   createdAt: string;
   updatedAt: string;
 }

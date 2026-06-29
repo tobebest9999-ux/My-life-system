@@ -28,7 +28,9 @@ export const subCategoryLabels: Record<MainCategory, Record<string, string>> = {
     other: '\u5176\u4ed6',
   },
   project: {
-    general: '通用',
+    gameDemo: '\u6e38\u620f Demo',
+    development: '\u5f00\u53d1\u9879\u76ee',
+    creation: '\u521b\u4f5c\u9879\u76ee',
   },
 };
 
@@ -36,7 +38,7 @@ export const defaultSubCategory: Record<MainCategory, string> = {
   entertainment: 'game',
   exercise: 'strength',
   study: 'computer',
-  project: 'general',
+  project: 'gameDemo',
 };
 
 export const projectStatusLabels: Record<ProjectStatus, string> = {

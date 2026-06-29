@@ -26,8 +26,11 @@ import type {
   Project,
   ProjectImage,
   ProjectJournalEntry,
+  ProjectLibraryAsset,
   ProjectReminder,
   ProjectStatus,
+  ProjectSubCategory,
+  ProjectTask,
   Session,
   SessionAttachment,
   WeeklyPlan,
@@ -205,6 +208,8 @@ function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [weeklyPlans, setWeeklyPlans] = useState<WeeklyPlan[]>([]);
   const [projectReminders, setProjectReminders] = useState<ProjectReminder[]>([]);
+  const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
+  const [projectLibraryAssets, setProjectLibraryAssets] = useState<ProjectLibraryAsset[]>([]);
   const [exercisePlans, setExercisePlans] = useState<ExercisePlan[]>([]);
   const [growthMetrics, setGrowthMetrics] = useState<GrowthMetric[]>([]);
   const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>([]);
@@ -220,13 +225,15 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   const reload = async () => {
-    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedProjectReminders, storedExercisePlans, storedGrowthMetrics, storedGrowthRecords, storedStudyChapters, storedStudyLibraryItems, storedStudyLibraryPlans, storedTimer] = await Promise.all([
+    const [storedProjects, storedSessions, storedPlans, storedImages, storedJournalEntries, storedProjectReminders, storedProjectTasks, storedProjectLibraryAssets, storedExercisePlans, storedGrowthMetrics, storedGrowthRecords, storedStudyChapters, storedStudyLibraryItems, storedStudyLibraryPlans, storedTimer] = await Promise.all([
       storage.getProjects(),
       storage.getSessions(),
       storage.getWeeklyPlans(),
       storage.getProjectImages(),
       storage.getProjectJournalEntries(),
       storage.getProjectReminders(),
+      storage.getProjectTasks(),
+      storage.getProjectLibraryAssets(),
       storage.getExercisePlans(),
       storage.getGrowthMetrics(),
       storage.getGrowthRecords(),
@@ -241,6 +248,8 @@ function App() {
     setImages(storedImages);
     setJournalEntries(storedJournalEntries);
     setProjectReminders(sortByCreated(storedProjectReminders));
+    setProjectTasks(sortByCreated(storedProjectTasks));
+    setProjectLibraryAssets(sortByCreated(storedProjectLibraryAssets));
     setExercisePlans(sortByCreated(storedExercisePlans));
     setGrowthMetrics(sortByCreated(storedGrowthMetrics));
     setGrowthRecords(sortByCreated(storedGrowthRecords));
@@ -325,6 +334,8 @@ function App() {
       ...journalEntries.filter((entry) => entry.projectId === project.id).map((entry) => storage.deleteProjectJournalEntry(entry.id)),
       ...weeklyPlans.filter((plan) => plan.projectId === project.id).map((plan) => storage.deleteWeeklyPlan(plan.id)),
       ...projectReminders.filter((reminder) => reminder.projectId === project.id).map((reminder) => storage.deleteProjectReminder(reminder.id)),
+      ...projectTasks.filter((task) => task.projectId === project.id).map((task) => storage.deleteProjectTask(task.id)),
+      ...projectLibraryAssets.filter((asset) => asset.projectId === project.id).map((asset) => storage.deleteProjectLibraryAsset(asset.id)),
       ...exercisePlans.filter((plan) => plan.projectId === project.id).map((plan) => storage.deleteExercisePlan(plan.id)),
       ...studyChapters.filter((chapter) => chapter.projectId === project.id).map((chapter) => storage.deleteStudyChapter(chapter.id)),
       ...studyLibraryItems.filter((item) => item.projectId === project.id).map((item) => storage.deleteStudyLibraryItem(item.id)),
@@ -414,6 +425,30 @@ function App() {
     const confirmed = window.confirm(commonUi.confirmDeleteReminder);
     if (!confirmed) return;
     await storage.deleteProjectReminder(reminder.id);
+    await reload();
+  };
+
+  const saveProjectTask = async (task: ProjectTask) => {
+    await storage.saveProjectTask({ ...task, updatedAt: nowIso() });
+    await reload();
+  };
+
+  const deleteProjectTask = async (task: ProjectTask) => {
+    const confirmed = window.confirm('\u786e\u5b9a\u5220\u9664\u8fd9\u4e2a\u9879\u76ee\u4efb\u52a1\u5417\uff1f');
+    if (!confirmed) return;
+    await storage.deleteProjectTask(task.id);
+    await reload();
+  };
+
+  const saveProjectLibraryAsset = async (asset: ProjectLibraryAsset) => {
+    await storage.saveProjectLibraryAsset({ ...asset, updatedAt: nowIso() });
+    await reload();
+  };
+
+  const deleteProjectLibraryAsset = async (asset: ProjectLibraryAsset) => {
+    const confirmed = window.confirm('\u786e\u5b9a\u5220\u9664\u8fd9\u6761\u9879\u76ee\u5e93\u8d44\u6599\u5417\uff1f');
+    if (!confirmed) return;
+    await storage.deleteProjectLibraryAsset(asset.id);
     await reload();
   };
 
@@ -602,7 +637,7 @@ function App() {
           />
         ) : null}
         {!loading && page === 'projects' ? (
-          <BasicPage title={T.projects} description={T.projectPlaceholderPage} mainCategory="project" projects={projects} onCreateProject={createProject} onDeleteProject={deleteProject} onStartTimer={startTimer} onManualSession={openManual} />
+          <ProjectSystemPage projects={projects} sessions={sessions} journalEntries={journalEntries} reminders={projectReminders} tasks={projectTasks} assets={projectLibraryAssets} activeTimer={activeTimer} onCreateProject={createProject} onDeleteProject={deleteProject} onStartTimer={startTimer} onManualSession={openManual} onSaveJournalEntry={saveJournalEntry} onSaveReminder={saveProjectReminder} onDeleteReminder={deleteProjectReminder} onSaveTask={saveProjectTask} onDeleteTask={deleteProjectTask} onSaveAsset={saveProjectLibraryAsset} onDeleteAsset={deleteProjectLibraryAsset} />
         ) : null}
       </main>
 
@@ -1903,6 +1938,156 @@ function buildMonthCells(monthCursor: Date) {
   const offset = first.getDay();
   const days = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0).getDate();
   return [...Array(offset).fill(null), ...Array.from({ length: days }, (_, index) => new Date(monthCursor.getFullYear(), monthCursor.getMonth(), index + 1))] as (Date | null)[];
+}
+
+
+const projectSubCategoryLabels: Record<ProjectSubCategory, string> = {
+  gameDemo: '\u6e38\u620f Demo',
+  development: '\u5f00\u53d1\u9879\u76ee',
+  creation: '\u521b\u4f5c\u9879\u76ee',
+};
+
+const projectSubCategoryOptions: ProjectSubCategory[] = ['gameDemo', 'development', 'creation'];
+
+const projectAssetTypeLabels: Record<ProjectLibraryAsset['assetType'], string> = {
+  document: '\u6587\u6863',
+  image: '\u56fe\u7247',
+  code: '\u4ee3\u7801',
+  link: '\u94fe\u63a5',
+  other: '\u5176\u4ed6',
+};
+
+const projectAssetTypeOptions: ProjectLibraryAsset['assetType'][] = ['document', 'image', 'code', 'link', 'other'];
+
+function ProjectSystemPage({ projects, sessions, journalEntries, reminders, tasks, assets, activeTimer, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onSaveJournalEntry, onSaveReminder, onDeleteReminder, onSaveTask, onDeleteTask, onSaveAsset, onDeleteAsset }: {
+  projects: Project[];
+  sessions: Session[];
+  journalEntries: ProjectJournalEntry[];
+  reminders: ProjectReminder[];
+  tasks: ProjectTask[];
+  assets: ProjectLibraryAsset[];
+  activeTimer: ActiveTimer | null;
+  onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>;
+  onDeleteProject: (project: Project) => Promise<void>;
+  onStartTimer: (project: Project) => Promise<void>;
+  onManualSession: (preset: ManualPreset) => void;
+  onSaveJournalEntry: (entry: ProjectJournalEntry) => Promise<void>;
+  onSaveReminder: (reminder: ProjectReminder) => Promise<void>;
+  onDeleteReminder: (reminder: ProjectReminder) => Promise<void>;
+  onSaveTask: (task: ProjectTask) => Promise<void>;
+  onDeleteTask: (task: ProjectTask) => Promise<void>;
+  onSaveAsset: (asset: ProjectLibraryAsset) => Promise<void>;
+  onDeleteAsset: (asset: ProjectLibraryAsset) => Promise<void>;
+}) {
+  const projectProjects = projects.filter((project) => project.mainCategory === 'project');
+  const projectSessions = sessions.filter((session) => session.mainCategory === 'project');
+  const [view, setView] = useState<'home' | 'category' | 'project' | 'library' | 'plan'>('home');
+  const [category, setCategory] = useState<ProjectSubCategory>('gameDemo');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const selectedProject = projectProjects.find((project) => project.id === selectedProjectId);
+  const openCategory = (nextCategory: ProjectSubCategory) => { setCategory(nextCategory); setSelectedProjectId(''); setView('category'); };
+  const openProject = (projectId: string) => {
+    const project = projectProjects.find((item) => item.id === projectId);
+    if (!project) return;
+    setCategory(project.subCategory as ProjectSubCategory);
+    setSelectedProjectId(project.id);
+    setView('project');
+  };
+  const deleteAndLeaveProject = async (project: Project) => { await onDeleteProject(project); setSelectedProjectId(''); setView('category'); };
+
+  useEffect(() => {
+    if (selectedProjectId && !projectProjects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId('');
+      if (view === 'project') setView('category');
+    }
+  }, [selectedProjectId, projectProjects, view]);
+
+  if (view === 'category') {
+    return <ProjectCategoryBoard category={category} projects={projectProjects.filter((project) => project.subCategory === category)} sessions={projectSessions} reminders={reminders} activeTimer={activeTimer} onBack={() => setView('home')} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onOpenProject={openProject} onSaveReminder={onSaveReminder} onDeleteReminder={onDeleteReminder} />;
+  }
+  if (view === 'project' && selectedProject) {
+    return <ProjectWorkDetail project={selectedProject} sessions={projectSessions.filter((session) => session.projectId === selectedProject.id)} journalEntries={journalEntries.filter((entry) => entry.projectId === selectedProject.id)} reminders={reminders.filter((reminder) => reminder.projectId === selectedProject.id)} activeTimer={activeTimer} onBack={() => setView('category')} onDeleteProject={deleteAndLeaveProject} onStartTimer={onStartTimer} onManualSession={onManualSession} onSaveJournalEntry={onSaveJournalEntry} onSaveReminder={onSaveReminder} onDeleteReminder={onDeleteReminder} />;
+  }
+  if (view === 'library') {
+    return <ProjectLibraryPage projects={projectProjects} assets={assets} onBack={() => setView('home')} onSaveAsset={onSaveAsset} onDeleteAsset={onDeleteAsset} />;
+  }
+  if (view === 'plan') {
+    return <ProjectPlanPage projects={projectProjects} tasks={tasks} onBack={() => setView('home')} onSaveTask={onSaveTask} onDeleteTask={onDeleteTask} onOpenProject={openProject} />;
+  }
+
+  return <ProjectHome projects={projectProjects} sessions={projectSessions} tasks={tasks} assets={assets} onOpenCategory={openCategory} onOpenLibrary={() => setView('library')} onOpenPlan={() => setView('plan')} onOpenProject={openProject} onSaveTask={onSaveTask} />;
+}
+
+function ProjectHome({ projects, sessions, tasks, assets, onOpenCategory, onOpenLibrary, onOpenPlan, onOpenProject, onSaveTask }: { projects: Project[]; sessions: Session[]; tasks: ProjectTask[]; assets: ProjectLibraryAsset[]; onOpenCategory: (category: ProjectSubCategory) => void; onOpenLibrary: () => void; onOpenPlan: () => void; onOpenProject: (id: string) => void; onSaveTask: (task: ProjectTask) => Promise<void> }) {
+  const today = toDateKey(new Date());
+  const todayTasks = tasks.filter((task) => task.date === today);
+  const overdueTasks = tasks.filter((task) => task.date < today && task.status !== 'completed').sort((a, b) => a.date.localeCompare(b.date));
+  return <div className="project-system-page"><section className="study-hero panel project-system-hero"><div><p className="eyebrow">{T.stage}</p><h2>{'\u9879\u76ee'}</h2><p>{'\u628a\u6e38\u620f Demo\u3001\u5f00\u53d1\u9879\u76ee\u548c\u521b\u4f5c\u9879\u76ee\u6536\u7eb3\u5230\u4e00\u4e2a\u63a8\u8fdb\u7cfb\u7edf\u91cc\uff0c\u8bb0\u5f55\u65f6\u95f4\u3001\u7b14\u8bb0\u3001\u8d44\u6599\u548c\u4efb\u52a1\u3002'}</p></div><div className="exercise-hero-stats"><span>{projects.length} {'\u4e2a\u9879\u76ee'}</span><span>{sessions.length} {'\u6761\u8bb0\u5f55'}</span><span>{assets.length} {'\u6761\u8d44\u6599'}</span></div></section><section className="panel project-category-panel"><h2>{'\u9879\u76ee\u5206\u7c7b'}</h2><ProjectCategoryEntrances projects={projects} sessions={sessions} onOpenCategory={onOpenCategory} /></section><section className="panel project-distribution-panel"><h2>{'\u9879\u76ee\u65f6\u95f4\u5206\u5e03'}</h2><ProjectTimeDistribution sessions={sessions} /></section><section className="panel project-library-entry-panel"><div className="project-entry-grid"><button className="study-library-entry-card" onClick={onOpenLibrary}><div><strong>{'\u9879\u76ee\u5e93'}</strong><span>{assets.length} {'\u6761\u8d44\u6599'}</span></div><p>{'\u6536\u7eb3\u6587\u6863\u3001\u4ee3\u7801\u3001\u94fe\u63a5\u7b49\u9879\u76ee\u8d44\u6599\u5360\u4f4d\u6761\u76ee\u3002'}</p><footer><span>{projects.length} {'\u4e2a\u5173\u8054\u9879\u76ee'}</span><em>{'\u6253\u5f00'}</em></footer></button><button className="study-library-entry-card" onClick={onOpenPlan}><div><strong>{'\u8ba1\u5212\u8868'}</strong><span>{tasks.length} {'\u4e2a\u4efb\u52a1'}</span></div><p>{'\u6309\u65e5\u671f\u7ba1\u7406\u4efb\u52a1\uff0c\u663e\u793a\u4eca\u5929\u8981\u505a\u548c\u8fc7\u53bb\u672a\u5b8c\u6210\u7684\u4e8b\u3002'}</p><footer><span>{todayTasks.length} {'\u4eca\u65e5\u4efb\u52a1'}</span><em>{'\u6253\u5f00'}</em></footer></button></div></section><section className="panel project-task-summary"><h2>{'\u4eca\u65e5\u4efb\u52a1'}</h2><ProjectTaskSummary tasks={todayTasks} projects={projects} onOpenProject={onOpenProject} onSaveTask={onSaveTask} empty={'\u4eca\u5929\u8fd8\u6ca1\u6709\u9879\u76ee\u4efb\u52a1'} /></section><section className="panel project-task-summary"><h2>{'\u8fc7\u53bb\u672a\u5b8c\u6210'}</h2><ProjectTaskSummary tasks={overdueTasks} projects={projects} onOpenProject={onOpenProject} onSaveTask={onSaveTask} empty={'\u6ca1\u6709\u8fc7\u53bb\u672a\u5b8c\u6210\u7684\u9879\u76ee\u4efb\u52a1'} /></section></div>;
+}
+
+function ProjectCategoryEntrances({ projects, sessions, onOpenCategory }: { projects: Project[]; sessions: Session[]; onOpenCategory: (category: ProjectSubCategory) => void }) {
+  const total = sessions.reduce((sum, session) => sum + session.durationMinutes, 0);
+  return <div className="exercise-category-entrances project-category-entrances">{projectSubCategoryOptions.map((category) => { const categoryProjects = projects.filter((project) => project.subCategory === category); const categorySessions = sessions.filter((session) => session.subCategory === category); const minutes = categorySessions.reduce((sum, session) => sum + session.durationMinutes, 0); const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; const recent = categoryProjects[0]; return <button key={category} className={'exercise-category-entry project-category-entry ' + category} onClick={() => onOpenCategory(category)}><div><strong>{projectSubCategoryLabels[category]}</strong><span>{categoryProjects.length} {'\u4e2a\u9879\u76ee'}</span></div><p>{recent ? '\u6700\u8fd1\uff1a' + recent.name : '\u6682\u65e0\u9879\u76ee'}</p><div className="exercise-progress"><div className={category} style={{ width: percent + '%' }} /></div><footer><span>{formatDuration(minutes)}</span><em>{percent}%</em></footer></button>; })}</div>;
+}
+
+function ProjectTimeDistribution({ sessions }: { sessions: Session[] }) {
+  const totals = projectSubCategoryOptions.reduce((acc, category) => ({ ...acc, [category]: 0 }), {} as Record<ProjectSubCategory, number>);
+  sessions.forEach((session) => { const key = session.subCategory as ProjectSubCategory; if (key in totals) totals[key] += session.durationMinutes; });
+  const total = Object.values(totals).reduce((sum, value) => sum + value, 0);
+  return <div className="exercise-distribution project-time-distribution"><div className="exercise-progress-list">{projectSubCategoryOptions.map((category) => { const minutes = totals[category]; const percent = total > 0 ? Math.round((minutes / total) * 100) : 0; return <div className="exercise-progress-row" key={category}><span>{projectSubCategoryLabels[category]}</span><div className="exercise-progress"><div className={category} style={{ width: percent + '%' }} /></div><strong>{formatDuration(minutes)} / {percent}%</strong></div>; })}</div></div>;
+}
+
+function ProjectCategoryBoard({ category, projects, sessions, reminders, activeTimer, onBack, onCreateProject, onDeleteProject, onStartTimer, onManualSession, onOpenProject, onSaveReminder, onDeleteReminder }: { category: ProjectSubCategory; projects: Project[]; sessions: Session[]; reminders: ProjectReminder[]; activeTimer: ActiveTimer | null; onBack: () => void; onCreateProject: (input: { name: string; mainCategory: MainCategory; subCategory: string; status?: ProjectStatus; imageUrl?: string }) => Promise<Project>; onDeleteProject: (project: Project) => Promise<void>; onStartTimer: (project: Project) => Promise<void>; onManualSession: (preset: ManualPreset) => void; onOpenProject: (projectId: string) => void; onSaveReminder: (reminder: ProjectReminder) => Promise<void>; onDeleteReminder: (reminder: ProjectReminder) => Promise<void> }) {
+  const [name, setName] = useState('');
+  const create = async () => { if (!name.trim()) return; const project = await onCreateProject({ name: name.trim(), mainCategory: 'project', subCategory: category, status: 'active' }); setName(''); onOpenProject(project.id); };
+  return <div className="notion-page project-category-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{'\u9879\u76ee / ' + projectSubCategoryLabels[category]}</div><h2>{projectSubCategoryLabels[category]}</h2><p>{'\u8fd9\u91cc\u653e\u5f53\u524d\u9879\u76ee\u7c7b\u578b\u4e0b\u7684\u9879\u76ee\uff0c\u70b9\u51fb\u9879\u76ee\u8fdb\u5165\u8be6\u60c5\u9875\u3002'}</p></section><section className="panel project-category-list-panel"><div className="inline-create"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={'\u4f8b\u5982\uff1a\u5e73\u53f0\u8df3\u8dc3'} /><button className="secondary-button compact" onClick={create}>{'\u521b\u5efa\u9879\u76ee'}</button></div>{projects.length === 0 ? <p className="empty-text">{'\u6682\u65e0\u9879\u76ee'}</p> : <div className="project-system-table">{projects.map((project) => { const projectSessions = sessions.filter((session) => session.projectId === project.id); const projectReminders = reminders.filter((reminder) => reminder.projectId === project.id); const total = projectSessions.reduce((sum, session) => sum + session.durationMinutes, 0); const latest = projectSessions[0]; const nextReminder = projectReminders.filter((reminder) => reminder.status === 'active').sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0]; return <article key={project.id} className="project-system-row" onClick={() => onOpenProject(project.id)}><div><strong>{project.name}</strong><span>{projectSubCategoryLabels[category]} / {formatDuration(total)} / {projectSessions.length} {'\u6761\u8bb0\u5f55'}</span><em>{latest ? '\u6700\u8fd1\uff1a' + formatDateTime(latest.startTime) : '\u6682\u65e0\u8bb0\u5f55'}</em><em>{nextReminder ? '\u4e0b\u6b21\u63d0\u9192\uff1a' + formatDateTime(nextReminder.scheduledAt) : '\u6682\u65e0\u63d0\u9192'}</em></div><ProjectReminderMini project={project} reminders={projectReminders} onSaveReminder={onSaveReminder} onDeleteReminder={onDeleteReminder} /><div className="exercise-card-actions"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={(event) => { event.stopPropagation(); void onStartTimer(project); }}>{T.startTimer}</button><button className="secondary-button compact" onClick={(event) => { event.stopPropagation(); onManualSession({ mainCategory: 'project', subCategory: category, projectId: project.id }); }}>{T.manualSession}</button><button className="danger-button compact" onClick={(event) => { event.stopPropagation(); void onDeleteProject(project); }}>{commonUi.delete}</button></div></article>; })}</div>}</section></div>;
+}
+
+function ProjectReminderMini({ project, reminders, onSaveReminder, onDeleteReminder }: { project: Project; reminders: ProjectReminder[]; onSaveReminder: (reminder: ProjectReminder) => Promise<void>; onDeleteReminder: (reminder: ProjectReminder) => Promise<void> }) {
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [title, setTitle] = useState('');
+  const add = async () => { if (!scheduledAt) return; const timestamp = nowIso(); await onSaveReminder({ id: createId(), mainCategory: 'project', subCategory: project.subCategory, projectId: project.id, title: title.trim() || '\u63a8\u8fdb ' + project.name, scheduledAt: fromInputDateTime(scheduledAt), note: '', status: 'active', createdAt: timestamp, updatedAt: timestamp }); setScheduledAt(''); setTitle(''); };
+  return <div className="project-reminder-mini" onClick={(event) => event.stopPropagation()}><input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={'\u63d0\u9192\u5185\u5bb9'} /><button className="secondary-button compact" onClick={add}>{'\u4fdd\u5b58\u63d0\u9192'}</button>{reminders.slice(0, 2).map((reminder) => <span key={reminder.id} className="project-reminder-chip">{formatDateTime(reminder.scheduledAt)}<button onClick={() => void onDeleteReminder(reminder)}>{'\u5220\u9664'}</button></span>)}</div>;
+}
+
+function ProjectWorkDetail({ project, sessions, journalEntries, reminders, activeTimer, onBack, onDeleteProject, onStartTimer, onManualSession, onSaveJournalEntry, onSaveReminder, onDeleteReminder }: { project: Project; sessions: Session[]; journalEntries: ProjectJournalEntry[]; reminders: ProjectReminder[]; activeTimer: ActiveTimer | null; onBack: () => void; onDeleteProject: (project: Project) => Promise<void>; onStartTimer: (project: Project) => Promise<void>; onManualSession: (preset: ManualPreset) => void; onSaveJournalEntry: (entry: ProjectJournalEntry) => Promise<void>; onSaveReminder: (reminder: ProjectReminder) => Promise<void>; onDeleteReminder: (reminder: ProjectReminder) => Promise<void> }) {
+  const total = sessions.reduce((sum, session) => sum + session.durationMinutes, 0);
+  const latest = sessions[0];
+  const nextReminder = reminders.filter((reminder) => reminder.status === 'active').sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0];
+  return <div className="notion-page project-work-detail"><section className="notion-doc-title"><div className="notion-title-actions"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><button className="danger-button compact" onClick={() => void onDeleteProject(project)}>{commonUi.delete}</button></div><div className="notion-breadcrumb">{'\u9879\u76ee / ' + projectSubCategoryLabels[project.subCategory as ProjectSubCategory] + ' / ' + project.name}</div><h2>{project.name}</h2><div className="notion-properties"><div><span>{'\u5206\u7c7b'}</span><strong>{projectSubCategoryLabels[project.subCategory as ProjectSubCategory]}</strong></div><div><span>{'\u603b\u65f6\u957f'}</span><strong>{formatDuration(total)}</strong></div><div><span>{'\u8bb0\u5f55\u6b21\u6570'}</span><strong>{sessions.length}</strong></div><div><span>{'\u6700\u8fd1\u8bb0\u5f55'}</span><strong>{latest ? formatDateTime(latest.startTime) : '\u6682\u65e0\u8bb0\u5f55'}</strong></div><div><span>{'\u4e0b\u6b21\u63d0\u9192'}</span><strong>{nextReminder ? formatDateTime(nextReminder.scheduledAt) : '\u6682\u65e0\u63d0\u9192'}</strong></div></div></section><section className="notebook-toolbar"><button className="primary-button compact" disabled={Boolean(activeTimer)} onClick={() => onStartTimer(project)}>{T.startTimer}</button><button className="secondary-button compact" onClick={() => onManualSession({ mainCategory: 'project', subCategory: project.subCategory, projectId: project.id })}>{T.manualSession}</button><ProjectReminderMini project={project} reminders={reminders} onSaveReminder={onSaveReminder} onDeleteReminder={onDeleteReminder} /></section><section className="panel"><h3>{'\u9879\u76ee\u7b14\u8bb0'}</h3><ProjectNotebook project={project} sessions={sessions} journalEntries={journalEntries} onSaveJournalEntry={onSaveJournalEntry} /></section><section className="panel"><h3>{T.recentRecords}</h3>{sessions.length === 0 ? <p className="empty-text">{T.noRecords}</p> : <SessionList sessions={sessions.slice(0, 8)} />}</section></div>;
+}
+
+function ProjectLibraryPage({ projects, assets, onBack, onSaveAsset, onDeleteAsset }: { projects: Project[]; assets: ProjectLibraryAsset[]; onBack: () => void; onSaveAsset: (asset: ProjectLibraryAsset) => Promise<void>; onDeleteAsset: (asset: ProjectLibraryAsset) => Promise<void> }) {
+  const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
+  const [name, setName] = useState('');
+  const [assetType, setAssetType] = useState<ProjectLibraryAsset['assetType']>('document');
+  const [note, setNote] = useState('');
+  useEffect(() => { if (!projectId && projects[0]) setProjectId(projects[0].id); if (projectId && !projects.some((project) => project.id === projectId)) setProjectId(projects[0]?.id ?? ''); }, [projectId, projects]);
+  const create = async () => { if (!projectId || !name.trim()) return; const timestamp = nowIso(); await onSaveAsset({ id: createId(), projectId, name: name.trim(), assetType, note: note.trim(), createdAt: timestamp, updatedAt: timestamp }); setName(''); setNote(''); };
+  const ordered = [...assets].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return <div className="notion-page project-library-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{'\u9879\u76ee / \u9879\u76ee\u5e93'}</div><h2>{'\u9879\u76ee\u5e93'}</h2><p>{'\u8fd9\u91cc\u5148\u505a\u8d44\u6599\u6846\u67b6\uff0c\u7528\u6765\u5173\u8054\u9879\u76ee\u548c\u8bb0\u5f55\u6587\u4ef6\u7ebf\u7d22\u3002'}</p></section><section className="panel project-library-panel"><div className="study-library-toolbar"><select value={projectId} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{projectSubCategoryLabels[project.subCategory as ProjectSubCategory]} / {project.name}</option>)}</select><input value={name} onChange={(event) => setName(event.target.value)} placeholder={'\u6587\u4ef6\u6216\u8d44\u6599\u540d'} /><select value={assetType} onChange={(event) => setAssetType(event.target.value as ProjectLibraryAsset['assetType'])}>{projectAssetTypeOptions.map((type) => <option key={type} value={type}>{projectAssetTypeLabels[type]}</option>)}</select><input value={note} onChange={(event) => setNote(event.target.value)} placeholder={'\u5907\u6ce8'} /><button className="primary-button" onClick={create}>{'\u65b0\u589e\u8d44\u6599'}</button></div>{projects.length === 0 ? <p className="empty-text">{'\u8bf7\u5148\u521b\u5efa\u9879\u76ee'}</p> : ordered.length === 0 ? <p className="empty-text">{'\u6682\u65e0\u9879\u76ee\u5e93\u8d44\u6599'}</p> : <div className="study-library-table"><div className="study-library-table-head"><span>{'\u540d\u79f0'}</span><span>{'\u5173\u8054\u9879\u76ee'}</span><span>{'\u7c7b\u578b'}</span><span>{'\u5907\u6ce8'}</span><span>{commonUi.action}</span></div>{ordered.map((asset) => { const project = projects.find((item) => item.id === asset.projectId); return <div key={asset.id} className="study-library-table-row"><strong>{asset.name}</strong><span>{project ? projectSubCategoryLabels[project.subCategory as ProjectSubCategory] + ' / ' + project.name : '\u672a\u5173\u8054'}</span><span>{projectAssetTypeLabels[asset.assetType]}</span><span>{asset.note || '\u65e0\u5907\u6ce8'}</span><em><button className="danger-button compact" onClick={() => void onDeleteAsset(asset)}>{commonUi.delete}</button></em></div>; })}</div>}</section></div>;
+}
+
+function ProjectPlanPage({ projects, tasks, onBack, onSaveTask, onDeleteTask, onOpenProject }: { projects: Project[]; tasks: ProjectTask[]; onBack: () => void; onSaveTask: (task: ProjectTask) => Promise<void>; onDeleteTask: (task: ProjectTask) => Promise<void>; onOpenProject: (id: string) => void }) {
+  const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
+  const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
+  const [title, setTitle] = useState('');
+  useEffect(() => { if (!projectId && projects[0]) setProjectId(projects[0].id); if (projectId && !projects.some((project) => project.id === projectId)) setProjectId(projects[0]?.id ?? ''); }, [projectId, projects]);
+  const isPast = selectedDate < toDateKey(new Date());
+  const moveDay = (days: number) => { const next = new Date(selectedDate + 'T00:00:00'); next.setDate(next.getDate() + days); setSelectedDate(toDateKey(next)); };
+  const create = async () => { if (!projectId || !title.trim() || isPast) return; const timestamp = nowIso(); await onSaveTask({ id: createId(), projectId, date: selectedDate, title: title.trim(), status: 'active', createdAt: timestamp, updatedAt: timestamp }); setTitle(''); };
+  const dayTasks = tasks.filter((task) => task.date === selectedDate).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return <div className="notion-page project-plan-page"><section className="notion-database-header"><button className="notion-back" onClick={onBack}>{'\u2190'} {commonUi.back}</button><div className="notion-breadcrumb">{'\u9879\u76ee / \u8ba1\u5212\u8868'}</div><h2>{'\u8ba1\u5212\u8868'}</h2><p>{'\u6309\u65e5\u671f\u7ed9\u5177\u4f53\u9879\u76ee\u62c6\u4efb\u52a1\uff0c\u53ef\u4ee5\u63d0\u524d\u5199\u660e\u5929\u6216\u540e\u5929\u7684\u4efb\u52a1\u3002'}</p></section><section className="panel project-plan-panel"><div className="study-plan-date-tools project-plan-date-tools"><button className="ghost-button compact" onClick={() => moveDay(-1)}>{'\u4e0a\u4e00\u5929'}</button><strong>{formatDate(selectedDate)}</strong><button className="ghost-button compact" onClick={() => moveDay(1)}>{'\u4e0b\u4e00\u5929'}</button><label><span>{'\u9009\u62e9\u65e5\u671f'}</span><input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value || toDateKey(new Date()))} /></label></div>{!isPast ? <div className="study-library-toolbar"><select value={projectId} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{projectSubCategoryLabels[project.subCategory as ProjectSubCategory]} / {project.name}</option>)}</select><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={'\u4f8b\u5982\uff1a\u4e3b\u89d2\u79fb\u52a8\u529f\u80fd'} /><button className="primary-button" onClick={create}>{'\u65b0\u589e\u4efb\u52a1'}</button></div> : <p className="muted">{'\u8fc7\u53bb\u7684\u4efb\u52a1\u4e0d\u518d\u65b0\u589e\u6216\u4fee\u6539\uff0c\u4f46\u53ef\u4ee5\u8865\u52fe\u5b8c\u6210\u3002'}</p>}{dayTasks.length === 0 ? <p className="empty-text">{'\u8fd9\u4e00\u5929\u8fd8\u6ca1\u6709\u9879\u76ee\u4efb\u52a1'}</p> : <div className="project-task-list">{dayTasks.map((task) => <ProjectTaskRow key={task.id} task={task} projects={projects} onSaveTask={onSaveTask} onDeleteTask={onDeleteTask} onOpenProject={onOpenProject} />)}</div>}</section></div>;
+}
+
+function ProjectTaskSummary({ tasks, projects, onOpenProject, onSaveTask, empty }: { tasks: ProjectTask[]; projects: Project[]; onOpenProject: (id: string) => void; onSaveTask: (task: ProjectTask) => Promise<void>; empty: string }) {
+  return tasks.length === 0 ? <p className="empty-text">{empty}</p> : <div className="project-task-list compact">{tasks.slice(0, 8).map((task) => <ProjectTaskRow key={task.id} task={task} projects={projects} onSaveTask={onSaveTask} onOpenProject={onOpenProject} />)}</div>;
+}
+
+function ProjectTaskRow({ task, projects, onSaveTask, onDeleteTask, onOpenProject }: { task: ProjectTask; projects: Project[]; onSaveTask: (task: ProjectTask) => Promise<void>; onDeleteTask?: (task: ProjectTask) => Promise<void>; onOpenProject: (id: string) => void }) {
+  const project = projects.find((item) => item.id === task.projectId);
+  const complete = async () => { await onSaveTask({ ...task, status: task.status === 'completed' ? 'active' : 'completed', completedAt: task.status === 'completed' ? undefined : nowIso() }); };
+  return <article className={'project-task-row ' + task.status}><label><input type="checkbox" checked={task.status === 'completed'} onChange={complete} /><span>{task.title}</span></label><button className="ghost-button compact" onClick={() => onOpenProject(task.projectId)}>{project ? project.name : '\u67e5\u770b\u9879\u76ee'}</button><time>{task.date}</time>{onDeleteTask ? <button className="danger-button compact" onClick={() => void onDeleteTask(task)}>{commonUi.delete}</button> : null}</article>;
 }
 
 function BasicPage({ title, description, mainCategory, projects, onCreateProject, onDeleteProject, onStartTimer, onManualSession }: {

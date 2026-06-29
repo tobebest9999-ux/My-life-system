@@ -4065,3 +4065,166 @@ textarea {
     width: min(280px, 100%) !important;
   }
 }
+
+.project-system-page {
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
+  gap: 18px;
+}
+
+.project-system-hero,
+.project-category-panel,
+.project-library-entry-panel {
+  grid-column: 1 / -1;
+}
+
+.project-category-entrances,
+.project-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.project-category-entry.gameDemo .exercise-progress div,
+.exercise-progress .gameDemo { background: #c45f48; }
+.project-category-entry.development .exercise-progress div,
+.exercise-progress .development { background: #3977c9; }
+.project-category-entry.creation .exercise-progress div,
+.exercise-progress .creation { background: #3b9b60; }
+
+.project-time-distribution {
+  min-height: 180px;
+}
+
+.project-system-table {
+  display: grid;
+  gap: 12px;
+}
+
+.project-system-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 0.95fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.project-system-row > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.project-system-row strong {
+  font-size: 20px;
+}
+
+.project-system-row span,
+.project-system-row em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.project-reminder-mini {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(120px, 0.8fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.project-reminder-chip {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #eef8f5;
+  color: var(--text);
+}
+
+.project-reminder-chip button {
+  border: 0;
+  background: transparent;
+  color: #b94040;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.project-work-detail .notebook-toolbar {
+  align-items: end;
+}
+
+.project-work-detail .project-reminder-mini {
+  flex: 1;
+  min-width: min(620px, 100%);
+}
+
+.project-task-summary {
+  min-height: 240px;
+}
+
+.project-task-list {
+  display: grid;
+  gap: 10px;
+}
+
+.project-task-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.project-task-row.completed {
+  border-color: #8ac4a0;
+  background: #edf8f0;
+}
+
+.project-task-row label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.project-task-row.completed label span {
+  color: #1f7a45;
+}
+
+.project-task-row time {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.project-plan-date-tools {
+  margin-bottom: 16px;
+  justify-content: flex-start;
+}
+
+.project-library-panel .study-library-toolbar,
+.project-plan-panel .study-library-toolbar {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 1180px) {
+  .project-system-page,
+  .project-category-entrances,
+  .project-entry-grid,
+  .project-system-row,
+  .project-task-row {
+    grid-template-columns: 1fr;
+  }
+
+  .project-reminder-mini {
+    grid-template-columns: 1fr;
+  }
+}

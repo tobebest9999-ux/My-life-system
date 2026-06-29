@@ -1,9 +1,9 @@
-import type { ActiveTimer, ExercisePlan, GrowthMetric, GrowthRecord, Project, ProjectImage, ProjectJournalEntry, ProjectReminder, Session, StudyChapter, StudyLibraryItem, StudyLibraryPlan, WeeklyPlan } from './types';
+import type { ActiveTimer, ExercisePlan, GrowthMetric, GrowthRecord, Project, ProjectImage, ProjectJournalEntry, ProjectLibraryAsset, ProjectReminder, ProjectTask, Session, StudyChapter, StudyLibraryItem, StudyLibraryPlan, WeeklyPlan } from './types';
 
-type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'projectReminders' | 'exercisePlans' | 'growthMetrics' | 'growthRecords' | 'studyChapters' | 'studyLibraryItems' | 'studyLibraryPlans' | 'activeTimer';
+type StoreName = 'projects' | 'sessions' | 'weeklyPlans' | 'projectImages' | 'projectJournalEntries' | 'projectReminders' | 'projectTasks' | 'projectLibraryAssets' | 'exercisePlans' | 'growthMetrics' | 'growthRecords' | 'studyChapters' | 'studyLibraryItems' | 'studyLibraryPlans' | 'activeTimer';
 
 const DB_NAME = 'personal-management-system';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -42,6 +42,15 @@ const openDatabase = () => {
         const store = db.createObjectStore('projectReminders', { keyPath: 'id' });
         store.createIndex('projectId', 'projectId');
         store.createIndex('scheduledAt', 'scheduledAt');
+      }
+      if (!db.objectStoreNames.contains('projectTasks')) {
+        const store = db.createObjectStore('projectTasks', { keyPath: 'id' });
+        store.createIndex('projectId', 'projectId');
+        store.createIndex('date', 'date');
+      }
+      if (!db.objectStoreNames.contains('projectLibraryAssets')) {
+        const store = db.createObjectStore('projectLibraryAssets', { keyPath: 'id' });
+        store.createIndex('projectId', 'projectId');
       }
       if (!db.objectStoreNames.contains('exercisePlans')) {
         const store = db.createObjectStore('exercisePlans', { keyPath: 'id' });
@@ -126,6 +135,12 @@ export const storage = {
   getProjectReminders: () => getAll<ProjectReminder>('projectReminders'),
   saveProjectReminder: (reminder: ProjectReminder) => put('projectReminders', reminder),
   deleteProjectReminder: (id: string) => remove('projectReminders', id),
+  getProjectTasks: () => getAll<ProjectTask>('projectTasks'),
+  saveProjectTask: (task: ProjectTask) => put('projectTasks', task),
+  deleteProjectTask: (id: string) => remove('projectTasks', id),
+  getProjectLibraryAssets: () => getAll<ProjectLibraryAsset>('projectLibraryAssets'),
+  saveProjectLibraryAsset: (asset: ProjectLibraryAsset) => put('projectLibraryAssets', asset),
+  deleteProjectLibraryAsset: (id: string) => remove('projectLibraryAssets', id),
   getExercisePlans: () => getAll<ExercisePlan>('exercisePlans'),
   saveExercisePlan: (plan: ExercisePlan) => put('exercisePlans', plan),
   deleteExercisePlan: (id: string) => remove('exercisePlans', id),
