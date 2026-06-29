@@ -115,6 +115,7 @@ export interface ProjectTask {
   date: string;
   title: string;
   status: ProjectTaskStatus;
+  note?: string;
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
