@@ -6,7 +6,7 @@ export type ExerciseSubCategory = 'strength' | 'cardio' | 'other';
 
 export type StudySubCategory = 'computer' | 'math' | 'english' | 'other';
 
-export type ProjectSubCategory = 'gameDemo' | 'development' | 'creation';
+export type ProjectSubCategory = 'gameDemo' | 'development' | 'creation' | 'other';
 
 export type StudyChapterStatus = 'notStarted' | 'completed';
 
